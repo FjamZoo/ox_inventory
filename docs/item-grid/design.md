@@ -12,7 +12,7 @@ Automatic allocation uses compatible stacks, then unrotated first fit. Existing 
 
 ## Authoritative ownership
 
-The inventory owner exposes two internal operations, Apply and Assess, backed by one private planner. These are not new external exports. Adapt existing exports and callbacks to complete domain changes. The planner operates on private candidate state and derives geometry and final weight. Publication changes all participants without yielding. No hooks, events, framework calls or notifications run inside publication.
+The inventory owner exposes two internal operations, `Assess(commands)` and `Apply(plan)`. These are not external exports. Assess builds private candidate state and derives geometry and final weight. Apply checks revisions and publishes all participants without yielding, then sends notifications and framework updates. Keeping the proposal between these calls lets hooks run before publication without rebuilding output metadata. No hooks, events, framework calls or notifications run inside the assignment phase.
 
 Changes cover add, remove, transfer, exchange, durability, resize, recovery and replacement. Exchange represents expected ingredient/currency debits, prepared output credits, durability changes and optional stock. Validate the final state, including space freed by consumed currency or ingredients. All-or-nothing non-stack additions and economic exchanges are required. Keep existing permissions, distance, container restrictions, item policy and hooks. Raw exported SwapSlots must own fit and weight checks. Remove duplicate caller weight accounting.
 

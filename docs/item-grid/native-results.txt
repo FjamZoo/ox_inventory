@@ -1,0 +1,192 @@
+PASS AddItem export stacks 1x1 items and preserves metadata
+PASS AddItem export allocates separate non-stack items
+PASS RemoveItem export releases the anchor and subtracts weight
+PASS CanCarryItem export enforces weight separately from empty anchors
+PASS swapItems callback splits and stacks 1x1 items
+PASS swapItems callback rejects overweight cross-inventory movement
+PASS swapItems callback swaps distinct 1x1 anchors
+PASS real save/load methods round-trip sparse records through persistence
+PASS shop callback pays currency and decrements stock
+PASS craft callback consumes ingredients and adds output
+PASS swapItems hook rejection preserves both inventories
+PASS confiscate and return exports restore sparse records
+PASS root server export reconstructs a saved player inventory
+PASS geometry occupancy default size at last cell
+PASS geometry occupancy rifle at first anchor
+PASS geometry occupancy rifle against right edge
+PASS geometry occupancy rifle wraps a row
+PASS geometry occupancy rotated rifle at right edge
+PASS geometry occupancy rotated rifle wraps a row
+PASS geometry occupancy partial last row fits exactly
+PASS geometry occupancy partial last row lacks a cell
+PASS geometry occupancy vertical footprint reaches partial row
+PASS geometry occupancy rectangle exceeds partial row
+PASS geometry occupancy wide item needs rotation
+PASS geometry occupancy wide item rotated vertically
+PASS geometry occupancy three column descriptor
+PASS geometry occupancy zero anchor
+PASS geometry occupancy fractional anchor
+PASS geometry occupancy anchor beyond capacity
+PASS geometry placement covered cell rejects phone
+PASS geometry placement uncovered cell accepts phone
+PASS geometry placement move can use released footprint
+PASS geometry placement split retains source footprint
+PASS geometry placement rotation at same anchor releases source
+PASS geometry placement rotation collides with another anchor
+PASS geometry first fit skips all covered cells
+PASS geometry size validates definitions and preserves rotatable wide items
+PASS a covered cell cannot receive another anchor
+PASS a 4x2 item cannot anchor at the last cell
+PASS item-table exports resolve canonical stack size and weight policy
+PASS planner rejects a multiple-count non-stack record without changing ownership
+PASS item-table exports reject missing or invalid definition names
+PASS explicit AddItem rejects invalid or covered destination 2
+PASS explicit AddItem rejects invalid or covered destination 4
+PASS explicit AddItem rejects invalid or covered destination 30
+PASS explicit AddItem rejects invalid or covered destination 0
+PASS explicit AddItem rejects invalid or covered destination -1
+PASS explicit AddItem rejects invalid or covered destination 1.5
+PASS explicit AddItem rejects invalid or covered destination 2
+PASS AddItem rejects footprints crossing a partial final row
+PASS non-stack batch addition fails without publishing a partial result
+PASS non-stack batch addition allocates complete non-overlapping rectangles
+PASS AddItem includes metadata weight in its own cap check
+PASS AddItem rejects an overweight batch without modifying existing records
+PASS carry and allocation exports derive their answer from covered cells
+PASS zero-weight non-stack carry amount is limited by geometry
+PASS wide definitions fit when explicitly rotated
+PASS SetSlot cannot create a covered anchor
+PASS same-anchor rotation publishes the new orientation
+PASS rotation rejection keeps the original rectangle and blocker
+PASS full movement preserves an omitted rotated orientation
+PASS full movement can occupy released source cells
+PASS splitting a multi-cell stack retains source occupancy
+PASS stacking retains the target orientation
+PASS swapping validates the two final rectangles together
+PASS raw SwapSlots export rejects overweight final inventories
+PASS raw SwapSlots export owns accepted cross-inventory weights
+PASS a supported hook mutation survives stale outer move rejection
+PASS give preserves the rotated source footprint
+PASS give keeps the established one-item default for omitted count
+PASS give keeps the established one-item default for zero count
+PASS drop preserves the rotated source footprint
+PASS container moves account for carried contents once
+PASS swapItems rejects zero count without mutation
+PASS swapItems rejects negative count without mutation
+PASS swapItems rejects fraction count without mutation
+PASS swapItems rejects string count without mutation
+PASS swapItems rejects NaN count without mutation
+PASS swapItems rejects infinite count without mutation
+PASS swapItems rejects string source without mutation
+PASS swapItems rejects zero source without mutation
+PASS swapItems rejects fraction source without mutation
+PASS swapItems rejects zero destination without mutation
+PASS swapItems rejects string destination without mutation
+PASS swapItems rejects fraction destination without mutation
+PASS swapItems rejects NaN destination without mutation
+PASS swapItems rejects infinite destination without mutation
+PASS swapItems rejects string rotation without mutation
+PASS swapItems rejects numeric rotation without mutation
+PASS swapItems rejects table source type without mutation
+PASS swapItems rejects inspect target without mutation
+PASS shop rejects covered placement without charging money or stock
+PASS shop plans placement using cells freed by consumed currency
+PASS shop preserves independent hook mutation when its proposal becomes stale
+PASS crafting plans placement using cells freed by consumed ingredients
+PASS crafting rejects covered output before progress or ingredient consumption
+PASS crafting revalidates ingredients after progress without undoing independent removal
+PASS crafting preserves completion-hook mutation and rejects stale consumption
+PASS shop rejects invalid count 0 without charging
+PASS shop rejects invalid count -1 without charging
+PASS shop rejects invalid count 1.5 without charging
+PASS shop rejects invalid count 1 without charging
+PASS shop rejects invalid count inf without charging
+PASS shop rejects invalid count -nan(ind) without charging
+PASS non-stack saved multiplicity stays intact in weighted invalid-record recovery
+PASS Remove persists untouched load-time recovery before a missing definition returns
+PASS SaveInventories persists untouched load-time recovery before a missing definition returns
+PASS load-time relocation persists without a later inventory mutation
+PASS existing recovery does not dirty an otherwise unchanged loaded inventory
+PASS reconciliation reserves later valid anchors before relocating displaced items
+PASS overflow remains owned recovery weight and is excluded from ordinary searches
+PASS reclaim charges no second weight for an owned recovery record
+PASS unknown saved records survive tagged save/load and block acquisition
+PASS unknown recovery permits withdrawal into an existing compatible target stack
+PASS invalid saved records are preserved verbatim in recovery
+PASS existing recovery envelopes stay inactive even when there is free space
+PASS resize moves excess items into recovery while retaining their weight
+PASS malformed JSON fails closed before an empty inventory can be saved
+PASS trunk save/load preserves rotation and recovery
+PASS glovebox save/load preserves rotation and recovery
+PASS death-drop export transfers active and recovery ownership together
+PASS confiscation source survives a failed durable restoration write
+PASS retrying failed durable restoration cannot duplicate confiscated items
+PASS duplicate recovery IDs preserve independently reclaimable records
+PASS malformed recovery envelopes remain raw invalid records
+PASS automatic reclaim tries rotation while explicit placement stays strict
+PASS confiscation persistence cannot create a second death-drop owner
+PASS restorePlayer releases a disconnected inventory after database result true
+PASS restorePlayer releases a disconnected inventory after database result false
+PASS confiscatePlayer releases a disconnected inventory after database result true
+PASS confiscatePlayer releases a disconnected inventory after database result false
+PASS GetSlot observes committed durability after an expired nondecaying item updates
+PASS GetSlotWithItem observes committed durability after an expired nondecaying item updates
+PASS GetSlotsWithItem observes committed durability after an expired nondecaying item updates
+PASS Save observes committed durability after an expired nondecaying item updates
+PASS SaveInventories observes committed durability after an expired nondecaying item updates
+PASS metadata weight removal recalculates the entire slot weight
+PASS overweight metadata replacement leaves the original metadata intact
+PASS CanSwapItem uses both freed space and retained source occupancy
+PASS SetItem growth cannot publish a partial non-stack batch
+PASS updating a registered stash reconciles its existing occupants
+PASS custom drop construction preserves excess generated items in recovery
+PASS temporary stash construction preserves excess generated items in recovery
+PASS real createItem hook mutation rejects a stale outer AddItem
+PASS real item metadata is generated once across craft preflight and completion
+PASS real durability mutation survives stale outer move rejection
+PASS root item use splits durability with item-aware rotated placement
+PASS root item use refuses a durability split when no rectangle fits
+PASS root item use accepts unrelated inventory changes during progress
+PASS root item use rejects changed source ownership during progress
+PASS weapon loading accepts the existing false slot sentinel and conserves ammunition weight
+PASS exported container mutations include carried owner weight
+PASS exported container acquisition rejects its carried owner weight cap
+PASS exported container mutation invalidates a stale proposal involving its owner
+PASS ESX root reconstruction prefers durable grid over supplied framework data
+PASS ESX root persists the initial canonical inventory before publishing it
+PASS ESX failed initial canonical save does not expose a player inventory
+PASS ESX save cadence retains rotation and tagged recovery through framework mirror changes
+PASS ESX saved empty ownership remains authoritative over stale framework items
+PASS real ESX mysql save writes framework mirror and canonical grid in one transaction
+PASS real ESX mysql restore removes only the owner-scoped confiscation source transactionally
+PASS real ESX mysql confiscation atomically empties both player stores and preserves original records
+PASS real ESX mysql loading reads the canonical grid before a stale framework mirror
+PASS real ESX mysql bulk player save uses transactional canonical writes
+PASS real mysql stale-stash cleanup excludes reserved canonical player grids
+PASS real ESX mysql transaction failure is returned to the inventory caller
+PASS real ESX mysql saves explicit empty canonical ownership when inventory is nil
+PASS nd disconnect during confiscatePlayer releases committed ownership
+PASS nd disconnect during restorePlayer releases committed ownership
+PASS qbx disconnect during confiscatePlayer releases committed ownership
+PASS qbx disconnect during restorePlayer releases committed ownership
+PASS ESX disconnect during initial import retires the unpublished inventory
+PASS ESX disconnected initial recovery remains in player storage
+PASS framework synchronization failure reports a committed confiscation as successful
+PASS unexpected publication error still releases the storage guard
+PASS repeated confiscation preserves earlier ownership with new grant false
+PASS repeated confiscation preserves earlier ownership with new grant true
+PASS confiscation refuses malformed stored ownership without overwriting either side
+PASS repeated confiscation merges colliding recovery IDs without losing weight or reclaimability
+PASS authoritative move preserves the equipped weapon before old-anchor deletion
+PASS authoritative swap preserves the equipped weapon before old-anchor deletion
+PASS authoritative rotate preserves the equipped weapon before old-anchor deletion
+PASS authoritative raw swap preserves the equipped weapon before old-anchor deletion
+PASS authoritative give disarms a departing equipped weapon
+PASS authoritative remove disarms a departing equipped weapon
+PASS authoritative exchange disarms a departing equipped weapon
+PASS swapping another item into the equipped anchor follows the displaced weapon
+PASS rejected cross-inventory movement retains the equipped weapon
+PASS equipped anchor mapping is private to the inventory owner
+PASS a late swap callback cannot restore an older equipped anchor
+PASS legacy updateSlots without weapon mapping retains equipped metadata updates
+191 passed, 0 failed

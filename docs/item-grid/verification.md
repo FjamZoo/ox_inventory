@@ -1,17 +1,36 @@
-# Verification plan
+# Verification record
 
-Done means every supported insertion or transfer path refuses an overlapping or out-of-bounds rectangle and an overweight final inventory. Rejected operations retain their prior counts, metadata, money and stock. Accepted moves conserve counts and weight across participants. Default 1x1 definitions preserve old slot behavior. Saved records survive load, reconciliation, save and reload. NUI geometry agrees with the server for the shared fixtures, includes same-anchor rotation and restores rejected moves.
+The checks execute the real server modules and the real NUI. Runtime boundaries remain explicit. Commands and fixture details are in [the test instructions](../../tests/README.md).
 
-The workflow is high rigor because it touches persistent possessions and economic operations.
+| Check | Recorded result | Scope |
+| --- | --- | --- |
+| Native CfxLua suites | 191 passed, zero failed | Actual exports, registered callbacks, hooks, planners, loaders and serializers |
+| Bun tests | 39 passed, zero failed | Shared geometry vectors, full-state refreshes, pending rejection and browser fixture behavior |
+| `bun x tsc --noEmit` | Passed | NUI types |
+| `bun run build` | Passed | Production NUI bundle |
+| `node tests/browser.mjs` | Six checks passed, no page errors | Real Chrome pointer drag, R rotation, footprint preview, split, rejection and reclaim |
+| Native Lua parsing | 61 files passed | CfxLua syntax, without source rewriting |
+| LuaLS with installed CfxLua plugin and native types | Zero errors; 1,229 warnings | Baseline had 1,331 warnings. Warning mode exits nonzero and is not claimed clean |
+| Fresh pinned CfxLua build helper | Passed | Reproducible interpreter build using MSVC |
 
-1. Trace server, storage and UI independently. Compare whole data-model alternatives before choosing the contract.
-2. Capture the unchanged build, native Lua parse results and actual server behavior. Build the verification harness before production changes.
-3. Implement the pure grid domain and deterministic recovery. Verify boundaries, overlap, rotation, batch placement and save round trips.
-4. Integrate every server mutation and export. Verify transactions through actual registered handlers and exports with explicit runtime stubs.
-5. Integrate client transport and NUI rendering, previews, rotation and rollback. Run geometry and reducer tests, TypeScript and production build.
-6. Review invariant coverage and new comments independently. Resolve demonstrated defects, rerun affected checks, and document remaining runtime gaps.
-7. Commit only task changes on the current branch. Push only origin and create the PR in FjamZoo/ox_inventory with base main.
+The smaller LuaLS warning total is not a clean regression check. New inferred-field and nil-check warnings remain alongside baseline diagnostics. These are unresolved type-analysis debt; only the zero-error result is claimed.
 
-The throughput checkpoint puts the geometry and transport contract before runtime/UI implementation. Server and UI writers own disjoint files. The harness writer owns tests and the reproducible runtime build helper. One writer owns all authoritative inventory mutation paths because they share state and transaction rules. No worker runs git commands. The lead owns integration, review and publication.
+The [native output](native-results.txt) lists the executed cases. The [baseline output](../../tests/baseline-output.txt) captures old behavior before production edits. The old AddItem admitted a phone into a rifle's covered cell, admitted an off-edge rifle and admitted excess weight. Desired rejection tests failed before the implementation. They pass in the new suite.
 
-Local evidence is not a live FiveM acceptance run. No server is configured. The browser tool returned no browsers. Live NUI pointer interaction, multiplayer networking, framework persistence and actual game item use remain unverified unless a runtime becomes available during the run.
+Native tests cover default 1x1 compatibility, clipped rows, both orientations, exact destinations, multi-item atomicity, swaps, splits, stacks, giving, drops, payment and ingredients freeing cells, durability, nested weight accounting, malicious numeric inputs, hook reentrancy and mutations during progress. Persistence cases cover relocation, unknown and malformed records, recovery weight, reclaim, capacity changes, saves, confiscation, return, failed writes and explicit empty ESX ownership. The actual MySQL module is exercised to inspect query and transaction shapes.
+
+Additional regressions execute actual framework bridge modules and extracted real client update handlers. They cover disconnect cleanup, repeated confiscation, recovery ID collisions, canonical item-table inputs, fresh durability records and equipped-weapon remapping before slot deletion. A fresh verifier independently passed the 191 checks and five additional failure/lookup scenarios after the review fixes.
+
+Browser screenshots show explicit development fixtures, with a solid background added for visibility. They are not screenshots from FiveM. The browser fixture supplies success or rejection; it does not prove server transport. Native server tests establish the corresponding authoritative decisions independently.
+
+![Rotated rifle with an eight-cell landing preview](screenshots/rotated-preview.png)
+
+[1280x720 split-stack screenshot](screenshots/split-1280.png).
+
+## Limits
+
+No live FiveM server or game client was configured. Multiplayer transport, actual game natives, equipped-weapon animation, framework resource lifecycles and live SQL transaction behavior remain unverified. Database tests capture real query construction and emulate outcomes; they do not execute a database engine. The default native fixture also simplifies item metadata policy, while selected tests explicitly load the real item modules.
+
+The connected browser tool returned no browsers. A separate headless Chrome run through Playwright supplied actual pointer evidence. This does not establish touch input, every screen resolution or the embedded FiveM CEF version.
+
+The independent [review record](review.md) records demonstrated defects and their treatment. Passing tests do not replace that review or the runtime limitations above.
