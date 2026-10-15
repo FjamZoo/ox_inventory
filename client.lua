@@ -923,8 +923,11 @@ exports('closeInventory', client.closeInventory)
 ---@param weight number
 local function updateInventory(data, weight, weaponSlot)
 	if currentWeapon and weaponSlot ~= nil then
-		if weaponSlot then currentWeapon.slot = weaponSlot
-		else currentWeapon = Weapon.Disarm(currentWeapon, true) end
+		if weaponSlot then
+			currentWeapon.slot = weaponSlot
+		else
+			currentWeapon = Weapon.Disarm(currentWeapon, true)
+		end
 	end
 	local changes = {}
     ---@type table<string, number>

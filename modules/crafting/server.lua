@@ -95,24 +95,33 @@ lib.callback.register('ox_inventory:openCraftingBench', function(source, id, ind
 end)
 
 local TriggerEventHooks = require 'modules.hooks.server'
+
 local function craftingAccess(source, inv, bench, index)
     if not bench then return false end
+
     local groups = getCraftingGroups(bench, index)
     local coords = getCraftingCoords(source, bench, index)
+
     return coords and (not groups or server.hasGroup(inv, groups)) and #(GetEntityCoords(GetPlayerPed(source)) - coords) <= 10
 end
 
 local function craftCommands(inv, recipe, credits)
     local commands, durability = {}, {}
+
     for name, needs in pairs(recipe.ingredients) do
         if type(needs) ~= 'number' or needs ~= needs or needs < 0 or needs == math.huge then return end
+
         local remaining, found = needs, false
+
         for slot = 1, inv.slots do
             local record = inv.items[slot]
             if record and record.name == name then
                 local value = record.metadata.durability
                 if needs == 0 then
-                    if not value or value > 100 and value > os.time() or value > 0 and value <= 100 then found = true break end
+                    if not value or value > 100 and value > os.time() or value > 0 and value <= 100 then
+                        found = true
+                        break
+                    end
                 elseif needs < 1 then
                     local item = Items(name)
                     local available = value and (value > 100 and ((value - os.time()) / ((record.metadata.degrade or item.degrade or 1) * 60)) or value / 100)
@@ -126,18 +135,24 @@ local function craftCommands(inv, recipe, credits)
                     local count = math.min(remaining, record.count)
                     commands[#commands + 1] = { kind = 'remove', inventory = inv, name = name, count = count, slot = slot }
                     remaining -= count
-                    if remaining == 0 then found = true break end
+                    if remaining == 0 then
+                        found = true
+                        break
+                    end
                 end
             end
         end
         if not found then return end
     end
+
     for _, command in ipairs(durability) do commands[#commands + 1] = command end
+
     for _, command in ipairs(credits) do
         command = table.clone(command)
         command.revision = inv.revision
         commands[#commands + 1] = command
     end
+
     return commands
 end
 

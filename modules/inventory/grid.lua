@@ -19,28 +19,41 @@ end
 ---@return ItemSize
 function Grid.Size(size)
     if size == nil then return { width = 1, height = 1 } end
-    assert(type(size) == 'table' and Grid.Integer(size.width) and Grid.Integer(size.height), 'item size requires positive integer width and height')
+
+    assert(
+        type(size) == 'table' and Grid.Integer(size.width) and Grid.Integer(size.height),
+        'item size requires positive integer width and height'
+    )
+
     return { width = size.width, height = size.height }
 end
 
 function Grid.Cells(grid, size, anchor, rotated)
     if not Grid.Integer(anchor) or anchor > grid.cells then return end
+
     local width, height = (size or {}).width or 1, (size or {}).height or 1
     if rotated then width, height = height, width end
     local column = (anchor - 1) % grid.columns
     if column + width > grid.columns then return end
     if anchor + (height - 1) * grid.columns + width - 1 > grid.cells then return end
+
     local cells = {}
+
     for row = 0, height - 1 do
         for x = 0, width - 1 do cells[#cells + 1] = anchor + row * grid.columns + x end
     end
+
     return cells
 end
 
 function Grid.Fits(grid, occupied, size, anchor, rotated)
     local cells = Grid.Cells(grid, size, anchor, rotated)
     if not cells then return false end
-    for i = 1, #cells do if occupied[cells[i]] then return false end end
+
+    for i = 1, #cells do
+        if occupied[cells[i]] then return false end
+    end
+
     return true, cells
 end
 

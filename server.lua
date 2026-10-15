@@ -31,7 +31,12 @@ function server.setPlayerInventory(player, data)
 
     if type(data) == 'table' and server.convertInventory then
         local legacy = next(data) ~= nil
-        for _, record in pairs(data) do if type(record) ~= 'number' then legacy = false break end end
+        for _, record in pairs(data) do
+            if type(record) ~= 'number' then
+                legacy = false
+                break
+            end
+        end
         if legacy then data = server.convertInventory(player.source, data) end
     end
     player.source = tonumber(player.source)
@@ -504,7 +509,10 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 consume = consume
             })
 
-            if not hooks.success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then hooks.success = false return false end
+            if not hooks.success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then
+                hooks.success = false
+                return false
+            end
 
             ---@type boolean
             local success = lib.callback.await('ox_inventory:usingItem', source, data, noAnim)
@@ -513,7 +521,10 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 inventory.weapon = success and slot or nil
             end
 
-            if not success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then hooks.success = false return false end
+            if not success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then
+                hooks.success = false
+                return false
+            end
 
             if consume and consume ~= 0 and not data.component then
                 data = inventory.items[data.slot]
@@ -524,7 +535,10 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
 
                 if durability then
                     local plan = Inventory.Assess({ { kind = 'durability', inventory = inventory, slot = data.slot, amount = consume } })
-                    if not plan or not Inventory.Apply(plan) then hooks.success = false return false end
+                    if not plan or not Inventory.Apply(plan) then
+                        hooks.success = false
+                        return false
+                    end
                 elseif not Inventory.RemoveItem(inventory.id, data.name, consume < 1 and 1 or consume, nil, data.slot) then
                     hooks.success = false
                     return false

@@ -241,10 +241,24 @@ lib.callback.register('ox_inventory:buyItem', function(source, data)
     })
     if not hooks.success then return false end
     local success = Inventory.Apply(plan)
-    if not success then hooks.success = false return false end
+    if not success then
+        hooks.success = false
+        return false
+    end
+
     TriggerClientEvent('ox_inventory:itemNotify', inv.id, { inv.items[data.toSlot], 'ui_added', count })
-    local message = locale('purchased_for', count, metadata.label or item.label, currency == 'money' and locale('$') or math.groupdigits(price), currency == 'money' and math.groupdigits(price) or ' ' .. Items(currency).label)
-    if server.loglevel > 0 and (server.loglevel > 1 or offer.price >= 500) then lib.logger(inv.owner, 'buyItem', ('"%s" %s'):format(inv.label, message:lower()), ('shop:%s'):format(shop.label)) end
+    local message = locale(
+        'purchased_for',
+        count,
+        metadata.label or item.label,
+        currency == 'money' and locale('$') or math.groupdigits(price),
+        currency == 'money' and math.groupdigits(price) or ' ' .. Items(currency).label
+    )
+
+    if server.loglevel > 0 and (server.loglevel > 1 or offer.price >= 500) then
+        lib.logger(inv.owner, 'buyItem', ('"%s" %s'):format(inv.label, message:lower()), ('shop:%s'):format(shop.label))
+    end
+
     return true, { data.toSlot, inv.items[data.toSlot], offer.count and offer, inv.weight }, { type = 'success', description = message }
 end)
 

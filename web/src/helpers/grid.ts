@@ -173,7 +173,7 @@ export const assessPlacement = ({
       pending: true,
     };
   result.kind = 'swap';
-  if (!fullMove || catalogue) return result;
+  if (!fullMove) return result;
   const targetIgnored = sameInventory ? [source.slot, target.slot] : [target.slot];
   const sourceIgnored = sameInventory ? targetIgnored : [source.slot];
   const targetCells = getOccupiedCells(
