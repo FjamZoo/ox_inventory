@@ -1,5 +1,11 @@
 local Grid = require 'modules.inventory.grid'
 
+---@class OxItem
+---@field size ItemSize
+
+---@class SlotWithItem
+---@field rotated? boolean
+
 local function useExport(resource, export)
 	return function(...)
 		return exports[resource][export](nil, ...)

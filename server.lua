@@ -13,6 +13,7 @@ local TriggerEventHooks = require 'modules.hooks.server'
 local db = require 'modules.mysql.server'
 local Items = require 'modules.items.server'
 local Inventory = require 'modules.inventory.server'
+local Grid = require 'modules.inventory.grid'
 local Utils = require 'modules.utils.server'
 
 ---@param player table
@@ -22,46 +23,27 @@ local Utils = require 'modules.utils.server'
 function server.setPlayerInventory(player, data)
     while not shared.ready do Wait(0) end
 
+    if shared.framework == 'esx' then data = db.loadPlayerGrid(player.identifier) or data end
+
     if not data then
         data = db.loadPlayer(player.identifier)
     end
 
-    local inventory = {}
-    local totalWeight = 0
-
-    if type(data) == 'table' then
-        local ostime = os.time()
-
-        for _, v in pairs(data) do
-            if type(v) == 'number' or not v.count or not v.slot then
-                if server.convertInventory then
-                    inventory, totalWeight = server.convertInventory(player.source, data)
-                    break
-                else
-                    return error(('Inventory for player.%s (%s) contains invalid data. Ensure you have converted inventories to the correct format.')
-                    :format(player.source, GetPlayerName(player.source)))
-                end
-            else
-                local item = Items(v.name)
-
-                if item then
-                    v.metadata = Items.CheckMetadata(v.metadata or {}, item, v.name, ostime)
-                    local weight = Inventory.SlotWeight(item, v)
-                    totalWeight = totalWeight + weight
-
-                    inventory[v.slot] = { name = item.name, label = item.label, weight = weight, slot = v.slot, count = v
-                    .count, description = item.description, metadata = v.metadata, stack = item.stack, close = item
-                    .close }
-                end
-            end
-        end
+    if type(data) == 'table' and server.convertInventory then
+        local legacy = next(data) ~= nil
+        for _, record in pairs(data) do if type(record) ~= 'number' then legacy = false break end end
+        if legacy then data = server.convertInventory(player.source, data) end
     end
-
     player.source = tonumber(player.source)
-    local inv = Inventory.Create(player.source, player.name, 'player', shared.playerslots, totalWeight,
-        shared.playerweight, player.identifier, inventory)
+    local inv = Inventory.Create(player.source, player.name, 'player', shared.playerslots, 0,
+        shared.playerweight, player.identifier, data or {})
 
     if inv then
+        if shared.framework == 'esx' and not Inventory.PersistPlayer(inv) then
+            Inventory.Remove(inv)
+            return error('Unable to persist authoritative player grid')
+        end
+        if Inventory(player.source) ~= inv then return end
         inv.player = server.setPlayerData(player)
 
         repeat
@@ -73,8 +55,8 @@ function server.setPlayerInventory(player, data)
         until inv.player.ped ~= 0
 
         if server.syncInventory then server.syncInventory(inv) end
-        TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inventory, totalWeight,
-            inv.player)
+        TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inv.items, inv.weight,
+            inv.player, inv.grid, inv.recovery)
     end
 end
 
@@ -299,6 +281,8 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
         label = left.label,
         type = left.type,
         slots = left.slots,
+        grid = left.grid,
+        recovery = left.recovery,
         weight = left.weight,
         maxWeight = left.maxWeight
     }, right and {
@@ -306,6 +290,8 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
         label = right.player and '' or right.label,
         type = right.player and 'otherplayer' or right.type,
         slots = right.slots,
+        grid = right.grid,
+        recovery = right.recovery,
         weight = right.weight,
         maxWeight = right.maxWeight,
         items = right.items,
@@ -382,6 +368,8 @@ lib.callback.register('ox_inventory:getInventory', function(source, id)
         label = inventory.label,
         type = inventory.type,
         slots = inventory.slots,
+        grid = inventory.grid,
+        recovery = inventory.recovery,
         weight = inventory.weight,
         maxWeight = inventory.maxWeight,
         owned = inventory.owner and true or false,
@@ -414,6 +402,7 @@ local GetLocks = require 'modules.locks'
 ---@param metadata { [string]: any }?
 ---@return table | boolean | nil
 lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, metadata, noAnim)
+    if type(itemName) ~= 'string' or (slot ~= nil and not Grid.Integer(slot)) then return false end
     local inventory = Inventory(source)
 
     if inventory and not inventory.usingItem and inventory.player then
@@ -453,7 +442,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                     { type = 'error', description = locale('not_enough_durability', label) })
             end
 
-            if data.count > 1 and consume < 1 and consume > 0 and not Inventory.GetEmptySlot(inventory) then
+            if data.count > 1 and consume < 1 and consume > 0 and not Inventory.Assess({ { kind = 'durability', inventory = inventory, slot = data.slot, amount = consume } }) then
                 return TriggerClientEvent('ox_lib:notify', source,
                     { type = 'error', description = locale('cannot_use', label) })
             end
@@ -466,6 +455,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
 
     		if not activeSlots then return end
 
+            local expectedItem = table.deepclone(data)
             data = { name = data.name, label = label, count = data.count, slot = slot, metadata = data.metadata, weight =
             data.weight }
 
@@ -514,7 +504,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 consume = consume
             })
 
-            if not hooks.success then return false end
+            if not hooks.success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then hooks.success = false return false end
 
             ---@type boolean
             local success = lib.callback.await('ox_inventory:usingItem', source, data, noAnim)
@@ -523,9 +513,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 inventory.weapon = success and slot or nil
             end
 
-            if not success then hooks.success = false return end
-
-            inventory.usingItem = data
+            if not success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then hooks.success = false return false end
 
             if consume and consume ~= 0 and not data.component then
                 data = inventory.items[data.slot]
@@ -535,41 +523,11 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 durability = consume ~= 0 and consume < 1 and data.metadata.durability --[[@as number | false]]
 
                 if durability then
-                    if durability > 100 then
-                        local degrade = (data.metadata.degrade or item.degrade) * 60
-                        durability -= degrade * consume
-                    else
-                        durability -= consume * 100
-                    end
-
-                    if data.count > 1 then
-                        local emptySlot = Inventory.GetEmptySlot(inventory)
-
-                        if emptySlot then
-                            local ok, newItem = Inventory.SetSlot(inventory, item, 1, table.deepclone(data.metadata),
-                                emptySlot)
-
-                            if ok and newItem then
-                                Items.UpdateDurability(inventory, newItem --[[@as SlotWithItem]], item, durability)
-                            end
-                        end
-
-                        durability = 0
-                    else
-                        Items.UpdateDurability(inventory, data, item, durability)
-                    end
-
-                    if durability <= 0 then
-                        durability = false
-                    end
-                end
-
-                if not durability then
-                    Inventory.RemoveItem(inventory.id, data.name, consume < 1 and 1 or consume, nil, data.slot)
-                else
-                    inventory.changed = true
-
-                    if server.syncInventory then server.syncInventory(inventory) end
+                    local plan = Inventory.Assess({ { kind = 'durability', inventory = inventory, slot = data.slot, amount = consume } })
+                    if not plan or not Inventory.Apply(plan) then hooks.success = false return false end
+                elseif not Inventory.RemoveItem(inventory.id, data.name, consume < 1 and 1 or consume, nil, data.slot) then
+                    hooks.success = false
+                    return false
                 end
 
                 if item?.cb then
@@ -577,6 +535,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 end
             end
 
+            inventory.usingItem = data
             return true
         end
     end

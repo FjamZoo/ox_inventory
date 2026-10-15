@@ -3,7 +3,7 @@ local root = script:match('^(.*)/tests/run%.lua$') or (script == 'tests/run.lua'
 assert(root, 'run the script using its tests/run.lua path')
 
 local Fixture = assert(loadfile(root .. '/tests/server/fixture.lua'))()
-local selected = arg[1] or '--compatibility'
+local selected = arg[1] or '--all'
 local failures, passed = 0, 0
 
 local function describe(value)
@@ -49,13 +49,23 @@ end
 
 local context = { root = root, Fixture = Fixture, test = test, equal = equal, slot = slot }
 local suites = {
+    ['--all'] = { 'compatibility', 'geometry', 'grid' },
     ['--compatibility'] = 'compatibility',
     ['--baseline'] = 'baseline',
     ['--grid'] = 'grid',
     ['--geometry'] = 'geometry',
+    ['--insertion'] = 'grid-insertion',
+    ['--moves'] = 'grid-moves',
+    ['--economy'] = 'grid-economy',
+    ['--recovery'] = 'grid-recovery',
+    ['--mutations'] = 'grid-mutations',
+    ['--esx'] = 'grid-esx',
+    ['--lifecycle'] = 'grid-lifecycle',
+    ['--weapons'] = 'grid-weapons',
 }
-assert(suites[selected], 'expected --compatibility, --baseline, --geometry, or --grid')
-assert(loadfile(root .. '/tests/server/' .. suites[selected] .. '.lua'))()(context)
+assert(suites[selected], 'unknown test suite ' .. selected)
+local chosen = type(suites[selected]) == 'table' and suites[selected] or { suites[selected] }
+for _, suite in ipairs(chosen) do assert(loadfile(root .. '/tests/server/' .. suite .. '.lua'))()(context) end
 
 print(('%d passed, %d failed'):format(passed, failures))
 os.exit(failures == 0 and 0 or 1)

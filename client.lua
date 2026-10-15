@@ -411,19 +411,7 @@ lib.callback.register('ox_inventory:usingItem', function(data, noAnim)
 			prop = item.prop --[[@as ProgressProps]]
 		})) and not PlayerData.dead
 
-		if success then
-			if item.notification then
-				lib.notify({ description = item.notification })
-			end
-
-			if item.status then
-				if client.setPlayerStatus then
-					client.setPlayerStatus(item.status)
-				end
-			end
-
-			return true
-		end
+        return success
 	end
 end)
 
@@ -476,6 +464,9 @@ local function useItem(data, cb, noAnim)
 	end
 
     if result then
+        local item = Items[slotData.name]?.client
+        if item?.notification then lib.notify({ description = item.notification }) end
+        if item?.status and client.setPlayerStatus then client.setPlayerStatus(item.status) end
         TriggerEvent('ox_inventory:usedItem', slotData.name, slotData.slot, next(slotData.metadata) and slotData.metadata)
     end
 
@@ -632,6 +623,7 @@ local function useSlot(slot, noAnim)
 
 					if newAmmo == currentAmmo then return end
 
+                    if not lib.callback.await('ox_inventory:updateWeapon', false, 'load', newAmmo, false, currentWeapon.metadata.specialAmmo) then return end
                     AddAmmoToPed(playerPed, currentWeapon.hash, addAmmo)
 
 					if cache.vehicle then
@@ -662,7 +654,7 @@ local function useSlot(slot, noAnim)
 						end)
 					end
 
-					lib.callback.await('ox_inventory:updateWeapon', false, 'load', newAmmo, false, currentWeapon.metadata.specialAmmo)
+
 				end)
 			elseif data.component then
 				local components = data.client.component
@@ -929,7 +921,11 @@ exports('closeInventory', client.closeInventory)
 
 ---@param data updateSlot[]
 ---@param weight number
-local function updateInventory(data, weight)
+local function updateInventory(data, weight, weaponSlot)
+	if currentWeapon and weaponSlot ~= nil then
+		if weaponSlot then currentWeapon.slot = weaponSlot
+		else currentWeapon = Weapon.Disarm(currentWeapon, true) end
+	end
 	local changes = {}
     ---@type table<string, number>
 	local itemCount = {}
@@ -1002,8 +998,8 @@ local function updateInventory(data, weight)
 	TriggerEvent('ox_inventory:updateInventory', changes)
 end
 
-RegisterNetEvent('ox_inventory:updateSlots', function(items, weights)
-	if source ~= '' and next(items) then updateInventory(items, weights) end
+RegisterNetEvent('ox_inventory:updateSlots', function(items, weights, weaponSlot)
+	if source ~= '' then updateInventory(items, weights, weaponSlot) end
 end)
 
 RegisterNetEvent('ox_inventory:syncInventory', function(data)
@@ -1903,22 +1899,12 @@ RegisterNUICallback('swapItems', function(data, cb)
 		data.instance = currentInstance
 	end
 
-	if currentWeapon and data.fromType ~= data.toType then
-		if (data.fromType == 'player' and data.fromSlot == currentWeapon.slot) or (data.toType == 'player' and data.toSlot == currentWeapon.slot) then
-			currentWeapon = Weapon.Disarm(currentWeapon, true)
-		end
-	end
-
-	local success, response, weaponSlot = lib.callback.await('ox_inventory:swapItems', false, data)
+	local success, response = lib.callback.await('ox_inventory:swapItems', false, data)
     swapActive = false
 
 	cb(success or false)
 
 	if success then
-        if weaponSlot and currentWeapon then
-            currentWeapon.slot = weaponSlot
-        end
-
 		if response then
 			updateInventory(response.items, response.weight)
 		end

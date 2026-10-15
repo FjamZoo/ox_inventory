@@ -59,13 +59,16 @@ function Fixture.new(root, options)
         timeouts = {},
         cron = {},
         writes = {},
-        persisted = { player = {}, stash = {}, trunk = {}, glovebox = {} },
+        deletes = {},
+        persisted = { player = {}, playerGrid = {}, stash = {}, trunk = {}, glovebox = {} },
         payloads = {},
         exploits = {},
         commands = {},
         libHooks = {},
+        threads = {},
+        starting = true,
         await = { ['ox_inventory:startCrafting'] = function() return true end },
-        definitions = clone(options.items or {
+        definitions = clone({
             phone = { name = 'phone', label = 'Phone', weight = 100, stack = false, close = true },
             water = { name = 'water', label = 'Water', weight = 250, stack = true, close = true },
             money = { name = 'money', label = 'Money', weight = 0, stack = true, close = true },
@@ -74,6 +77,8 @@ function Fixture.new(root, options)
         }),
         data = clone(options.data or {}),
     }
+
+    for name, item in pairs(options.items or {}) do fixture.definitions[name] = clone(item) end
 
     local env = setmetatable({}, { __index = _G })
     fixture.env = env
@@ -97,7 +102,7 @@ function Fixture.new(root, options)
     env.os = clone(os)
     env.os.microtime = function() return os.clock() * 1000000 end
     env.shared = {
-        resource = 'ox_inventory', framework = 'standalone', ready = true,
+        resource = 'ox_inventory', framework = options.framework or 'standalone', ready = true,
         playerslots = 30, playerweight = 30000, dropslots = 30, dropweight = 30000,
         police = {}, info = function() end,
     }
@@ -108,6 +113,7 @@ function Fixture.new(root, options)
     env.cache = { resource = 'ox_inventory', game = 'gta5' }
     env.locale = function(key, ...) return key end
     env.GetConvarInt = function(_, fallback) return fallback end
+    env.IsDuplicityVersion = function() return true end
     env.GetConvar = function(name, fallback)
         return name == 'inventory:versioncheck' and 'false' or fallback
     end
@@ -132,11 +138,15 @@ function Fixture.new(root, options)
     env.RegisterServerEvent = env.AddEventHandler
     env.RegisterNetEvent = env.AddEventHandler
     env.RegisterCommand = function(name, callback) fixture.commands[name] = callback end
-    env.CreateThread = function(callback) callback() end
+    env.CreateThread = function(callback)
+        if fixture.starting then fixture.threads[#fixture.threads + 1] = callback else callback() end
+    end
     env.SetTimeout = function(delay, callback)
         fixture.timeouts[#fixture.timeouts + 1] = { delay = delay, callback = callback }
     end
-    env.Wait = function() error('the fixture cannot simulate a yielding Wait', 2) end
+    env.Wait = function()
+        if not fixture.starting then error('the fixture cannot simulate a yielding Wait', 2) end
+    end
     env.exports = function(name, callback) fixture.exports[name] = callback end
     env.lib = {
         load = function(name) return clone(fixture.data[name] or {}) end,
@@ -181,7 +191,13 @@ function Fixture.new(root, options)
     end
 
     env.db = {
-        savePlayer = function(owner, payload) return save('player', owner, payload) end,
+        savePlayer = function(owner, payload)
+            if env.shared.framework == 'esx' and payload == nil then payload = env.json.encode({}) end
+            local result = save('player', owner, payload)
+            if env.shared.framework == 'esx' then fixture.persisted.playerGrid[owner] = payload end
+            return result
+        end,
+        loadPlayerGrid = function(owner) return fixture.persisted.playerGrid[owner] end,
         loadPlayer = function(owner)
             local payload = fixture.persisted.player[owner]
             return payload and env.json.decode(payload)
@@ -201,18 +217,42 @@ function Fixture.new(root, options)
     end
     env.MySQL = {
         scalar = { await = function(query, parameters)
-            assert(query == 'SELECT data FROM ox_inventory WHERE name = ?', 'unexpected scalar query')
+            assert(query == 'SELECT data FROM ox_inventory WHERE name = ?' or query == 'SELECT data FROM ox_inventory WHERE name = ? AND owner = ?', 'unexpected scalar query')
+            if parameters[2] then assert(parameters[2] == tostring(parameters[1]), 'unexpected confiscation owner') end
             return fixture.persisted.stash[stashKey(parameters[1], parameters[1])]
         end },
         update = { await = function(query, parameters)
-            assert(query == 'DELETE FROM ox_inventory WHERE name = ?', 'unexpected update query')
+            assert(query == 'DELETE FROM ox_inventory WHERE name = ?' or query == 'DELETE FROM ox_inventory WHERE name = ? AND owner = ?', 'unexpected update query')
+            if parameters[2] then assert(parameters[2] == tostring(parameters[1]), 'unexpected confiscation owner') end
+            fixture.deletes[#fixture.deletes + 1] = clone(parameters)
             fixture.persisted.stash[stashKey(parameters[1], parameters[1])] = nil
             return 1
         end },
     }
+    env.db.restorePlayer = function(owner, payload)
+        local saved = env.db.savePlayer(owner, payload)
+        if saved == false or saved == nil then return false end
+        env.MySQL.update.await('DELETE FROM ox_inventory WHERE name = ? AND owner = ?', { owner, tostring(owner) })
+        return true
+    end
+    env.db.confiscatePlayer = function(owner, payload)
+        local key = stashKey(owner, owner)
+        local previous = fixture.persisted.stash[key]
+        local saved = env.db.saveStash(owner, owner, payload)
+        if saved == false or saved == nil then return false end
+        saved = env.db.savePlayer(owner, nil)
+        if saved == false or saved == nil then
+            fixture.persisted.stash[key] = previous
+            return false
+        end
+        return true
+    end
 
     local items = setmetatable({ containers = {} }, {
-        __call = function(_, name) return name and fixture.definitions[name] or fixture.definitions end,
+        __call = function(_, name)
+            if name then return fixture.definitions[name] end
+            return fixture.definitions
+        end,
     })
     items.Metadata = function(_, item, metadata, count)
         if type(metadata) ~= 'table' then metadata = metadata and { type = metadata } or {} end
@@ -233,6 +273,10 @@ function Fixture.new(root, options)
             fixture.exploits[#fixture.exploits + 1] = { ... }
         end },
     }
+    if options.realItems then
+        fixture.data['data.items'] = clone(fixture.definitions)
+        modules['modules.items.server'] = nil
+    end
     env.require = function(name)
         if modules[name] ~= nil then return modules[name] end
 
@@ -243,13 +287,17 @@ function Fixture.new(root, options)
     end
 
     fixture.Inventory = env.require('modules.inventory.server')
-    fixture.Items = items
+    fixture.Items = options.realItems and env.require('modules.items.server') or items
+    if options.realItems then fixture.definitions = env.require('modules.items.shared') end
     env.require('modules.shops.server')
     env.require('modules.crafting.server')
     if options.loadServer then env.require('server') end
+    for i = 1, #fixture.threads do fixture.threads[i]() end
+    fixture.starting = false
 
     function fixture:inventory(id, invType, slots, maxWeight)
-        return self.Inventory.Create(id, tostring(id), invType or 'stash', slots or 30, 0, maxWeight or 30000, false, {})
+        local dbId = (invType == 'trunk' or invType == 'glovebox') and id or nil
+        return self.Inventory.Create(id, tostring(id), invType or 'stash', slots or 30, 0, maxWeight or 30000, false, {}, nil, dbId)
     end
 
     function fixture:player(id, slots, maxWeight)

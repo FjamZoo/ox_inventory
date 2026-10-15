@@ -3,6 +3,7 @@ if not lib then return end
 local CraftingBenches = {}
 local Items = require 'modules.items.server'
 local Inventory = require 'modules.inventory.server'
+local Grid = require 'modules.inventory.grid'
 
 ---@param id number | string
 ---@param data table
@@ -49,10 +50,9 @@ for id, data in pairs(lib.load('data.crafting') or {}) do createCraftingBench(da
 ---@param index number
 ---@return table?
 local function getCraftingGroups(bench, index)
-	return (shared.target and bench.zones) and bench.zones[index].groups or bench.groups
+	return (shared.target and bench.zones) and bench.zones[index]?.groups or bench.groups
 end
 
----falls back to player coords if zones and points are both nil
 ---@param source number
 ---@param bench table
 ---@param index number
@@ -61,7 +61,7 @@ local function getCraftingCoords(source, bench, index)
 	if not bench.zones and not bench.points then
 		return GetEntityCoords(GetPlayerPed(source))
 	else
-		return shared.target and bench.zones[index].coords or bench.points[index]
+		return shared.target and bench.zones[index]?.coords or bench.points[index]
 	end
 end
 
@@ -91,183 +91,87 @@ lib.callback.register('ox_inventory:openCraftingBench', function(source, id, ind
 		left:openInventory()
 	end
 
-	return { label = left.label, type = left.type, slots = left.slots, weight = left.weight, maxWeight = left.maxWeight }
+	return Inventory.Snapshot(left)
 end)
 
 local TriggerEventHooks = require 'modules.hooks.server'
-local GetLocks = require 'modules.locks'
+local function craftingAccess(source, inv, bench, index)
+    if not bench then return false end
+    local groups = getCraftingGroups(bench, index)
+    local coords = getCraftingCoords(source, bench, index)
+    return coords and (not groups or server.hasGroup(inv, groups)) and #(GetEntityCoords(GetPlayerPed(source)) - coords) <= 10
+end
 
-lib.callback.register('ox_inventory:craftItem', function(source, id, index, recipeId, toSlot)
-	local left, bench = Inventory(source), CraftingBenches[id]
-
-	if not left then return end
-
-	if bench then
-		local groups = getCraftingGroups(bench, index)
-		local coords = getCraftingCoords(source, bench, index)
-
-		if groups and not server.hasGroup(left, groups) then return end
-		if #(GetEntityCoords(GetPlayerPed(source)) - coords) > 10 then return end
-
-		local recipe = bench.items[recipeId]
-
-		if recipe then
-			local tbl, num = {}, 0
-
-			for name in pairs(recipe.ingredients) do
-				num += 1
-				tbl[num] = name
-			end
-
-			local craftedItem = Items(recipe.name)
-			local craftCount = (type(recipe.count) == 'number' and recipe.count) or (table.type(recipe.count) == 'array' and math.random(recipe.count[1], recipe.count[2])) or 1
-
-			-- Modified weight calculation
-			local newWeight = left.weight
-			local items = Inventory.Search(left, 'slots', tbl) or {}
-			---@todo new iterator or something to accept a map
-			-- First subtract weight of ingredients that will be removed
-			for name, needs in pairs(recipe.ingredients) do
-				if needs > 0 then
-					local item = Items(name)
-					if item then
-						newWeight -= (item.weight * needs)
-					end
-				end
-			end
-
-			-- Add weight of crafted item
-			newWeight += (craftedItem.weight + (recipe.metadata?.weight or 0)) * craftCount
-
-			if newWeight > left.maxWeight then return false, 'cannot_carry' end
-
-			local items = Inventory.Search(left, 'slots', tbl) or {}
-			table.wipe(tbl)
-
-			for name, needs in pairs(recipe.ingredients) do
-				if needs == 0 then break end
-
-				local slots = items[name] or items
-
-                if #slots == 0 then return end
-
-				for i = 1, #slots do
-					local slot = slots[i]
-
-					if needs == 0 then
-						if not slot.metadata.durability or slot.metadata.durability > 0 then
-							break
-						end
-					elseif needs < 1 then
-						local item = Items(name)
-						local durability = slot.metadata.durability
-
-						if durability and durability >= needs * 100 then
-							if durability > 100 then
-								local degrade = (slot.metadata.degrade or item.degrade) * 60
-								local percentage = ((durability - os.time()) * 100) / degrade
-
-								if percentage >= needs * 100 then
-									tbl[slot.slot] = needs
-									break
-								end
-							else
-								tbl[slot.slot] = needs
-								break
-							end
-						end
-					elseif needs <= slot.count then
-						tbl[slot.slot] = needs
-						break
-					else
-						tbl[slot.slot] = slot.count
-						needs -= slot.count
-					end
-
-					if needs == 0 then break end
-					-- Player does not have enough items (ui should prevent crafting if lacking items, so this shouldn't trigger)
-					if needs > 0 and i == #slots then return end
-				end
-			end
-
-            local lockIds = {}
-
-            for slot in pairs(tbl) do
-                lockIds[#lockIds + 1] = ('inventory-%s:slot-%s'):format(left.id, slot)
+local function craftCommands(inv, recipe, credits)
+    local commands, durability = {}, {}
+    for name, needs in pairs(recipe.ingredients) do
+        if type(needs) ~= 'number' or needs ~= needs or needs < 0 or needs == math.huge then return end
+        local remaining, found = needs, false
+        for slot = 1, inv.slots do
+            local record = inv.items[slot]
+            if record and record.name == name then
+                local value = record.metadata.durability
+                if needs == 0 then
+                    if not value or value > 100 and value > os.time() or value > 0 and value <= 100 then found = true break end
+                elseif needs < 1 then
+                    local item = Items(name)
+                    local available = value and (value > 100 and ((value - os.time()) / ((record.metadata.degrade or item.degrade or 1) * 60)) or value / 100)
+                    if available and available >= needs then
+                        durability[#durability + 1] = { kind = 'durability', inventory = inv, slot = slot, amount = needs }
+                        found = true
+                        break
+                    end
+                else
+                    if not Grid.Integer(needs) then return end
+                    local count = math.min(remaining, record.count)
+                    commands[#commands + 1] = { kind = 'remove', inventory = inv, name = name, count = count, slot = slot }
+                    remaining -= count
+                    if remaining == 0 then found = true break end
+                end
             end
+        end
+        if not found then return end
+    end
+    for _, command in ipairs(durability) do commands[#commands + 1] = command end
+    for _, command in ipairs(credits) do
+        command = table.clone(command)
+        command.revision = inv.revision
+        commands[#commands + 1] = command
+    end
+    return commands
+end
 
-            local activeSlots <close> = GetLocks(lockIds)
-
-            if not activeSlots then return end
-
-			local hooks <close> = TriggerEventHooks('craftItem', {
-				source = source,
-				benchId = id,
-				benchIndex = index,
-				recipe = recipe,
-				toInventory = left.id,
-				toSlot = toSlot,
-			})
-
-			if not hooks.success then return false end
-
-			local success = lib.callback.await('ox_inventory:startCrafting', source, id, recipeId)
-
-			if success then
-				for name, needs in pairs(recipe.ingredients) do
-					if Inventory.GetItemCount(left, name) < needs then hooks.success = false return end
-				end
-
-				for slot, count in pairs(tbl) do
-					local invSlot = left.items[slot]
-
-					if not invSlot then hooks.success = false return end
-
-					if count < 1 then
-						local item = Items(invSlot.name)
-						local durability = invSlot.metadata.durability or 100
-
-						if durability > 100 then
-							local degrade = (invSlot.metadata.degrade or item.degrade) * 60
-							durability -= degrade * count
-						else
-							durability -= count * 100
-						end
-
-						if invSlot.count > 1 then
-							local emptySlot = Inventory.GetEmptySlot(left)
-
-							if emptySlot then
-								local ok, newItem = Inventory.SetSlot(left, item, 1, table.deepclone(invSlot.metadata), emptySlot)
-
-								if ok and newItem then
-                                    Items.UpdateDurability(left, newItem --[[@as SlotWithItem]], item, durability < 0 and 0 or durability)
-								end
-							end
-
-							invSlot.count -= 1
-                            invSlot.weight = Inventory.SlotWeight(item, invSlot)
-
-							left:syncSlotsWithClients({
-								{
-									item = invSlot,
-									inventory = left.id
-								}
-							}, true)
-						else
-                            Items.UpdateDurability(left, invSlot, item, durability < 0 and 0 or durability)
-						end
-					else
-						local removed = invSlot and Inventory.RemoveItem(left, invSlot.name, count, nil, slot)
-						-- Failed to remove item (inventory state unexpectedly changed?)
-						if not removed then hooks.success = false return end
-					end
-				end
-
-				Inventory.AddItem(left, craftedItem, craftCount, recipe.metadata or {}, craftedItem.stack and toSlot or nil)
-			end
-
-			return success
-		end
-	end
+lib.callback.register('ox_inventory:craftItem', function(source, id, index, recipeId, toSlot, rotated)
+    if (type(id) ~= 'string' and not Grid.Integer(id)) or not Grid.Integer(index) or not Grid.Integer(recipeId)
+        or (toSlot ~= nil and not Grid.Integer(toSlot)) or (rotated ~= nil and type(rotated) ~= 'boolean') then return false end
+    local inv, bench = Inventory(source), CraftingBenches[id]
+    if not inv or not craftingAccess(source, inv, bench, index) then return false end
+    local recipe = bench.items[recipeId]
+    if not recipe then return false end
+    local expectedRecipe = table.deepclone(recipe)
+    local item = Items(recipe.name)
+    if not item then return false end
+    local count = type(recipe.count) == 'number' and recipe.count or type(recipe.count) == 'table' and math.random(recipe.count[1], recipe.count[2]) or 1
+    if not Grid.Integer(count) then return false end
+    local credits, err = Inventory.PrepareItems(inv, item, count, recipe.metadata or {}, toSlot, rotated)
+    if not credits then return false, err end
+    local commands = craftCommands(inv, recipe, credits)
+    if not commands then return false end
+    local plan
+    plan, err = Inventory.Assess(commands)
+    if not plan then return false, err end
+    if not lib.callback.await('ox_inventory:startCrafting', source, id, recipeId) then return false end
+    if Inventory(source) ~= inv or CraftingBenches[id] ~= bench or not craftingAccess(source, inv, bench, index)
+        or not table.matches(bench.items[recipeId], expectedRecipe) then return false end
+    commands = craftCommands(inv, recipe, credits)
+    if not commands then return false end
+    plan, err = Inventory.Assess(commands)
+    if not plan then return false, err end
+    local hooks <close> = TriggerEventHooks('craftItem', {
+        source = source, benchId = id, benchIndex = index, recipe = recipe, toInventory = inv.id, toSlot = toSlot,
+    })
+    if not hooks.success then return false end
+    local success, response = Inventory.Apply(plan)
+    if not success then hooks.success = false end
+    return success, response
 end)

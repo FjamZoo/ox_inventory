@@ -1,9 +1,22 @@
 local Grid = {}
 
+---@class ItemSize
+---@field width integer
+---@field height integer
+
+---@class InventoryGrid
+---@field columns integer
+---@field cells integer
+
+---@param value any
+---@param minimum? number
+---@return boolean
 function Grid.Integer(value, minimum)
     return type(value) == 'number' and value == value and value < math.huge and value % 1 == 0 and value >= (minimum or 1)
 end
 
+---@param size? ItemSize
+---@return ItemSize
 function Grid.Size(size)
     if size == nil then return { width = 1, height = 1 } end
     assert(type(size) == 'table' and Grid.Integer(size.width) and Grid.Integer(size.height), 'item size requires positive integer width and height')

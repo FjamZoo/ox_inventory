@@ -18,4 +18,8 @@ return function(context)
         equal(success, false)
         equal({ phone = inventory.items[1].name, weight = inventory.weight }, { phone = 'phone', weight = 100 })
     end)
+
+    for _, suite in ipairs({ 'grid-insertion', 'grid-moves', 'grid-economy', 'grid-recovery', 'grid-mutations', 'grid-esx', 'grid-lifecycle', 'grid-weapons' }) do
+        assert(loadfile(context.root .. '/tests/server/' .. suite .. '.lua'))()(context)
+    end
 end

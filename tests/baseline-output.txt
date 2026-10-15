@@ -1,6 +1,6 @@
 Native CfxLua baseline captured before production grid edits.
 
-Default compatibility suite: 13 passed, 0 failed.
+Default compatibility suite: 10 passed, 0 failed.
 Explicit --baseline suite: 4 passed, 0 failed.
   AddItem rifle 4x2 at anchor 1 then phone at anchor 2 returned true. Weight 4100.
   AddItem rifle 4x2 at anchor 30 in a 30-cell inventory returned true. Weight 4000.
