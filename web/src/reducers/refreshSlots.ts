@@ -23,12 +23,15 @@ export const refreshSlotsReducer: CaseReducer<State, PayloadAction<Payload>> = (
         : inventory.id === state.rightInventory.id
           ? 'rightInventory'
           : undefined;
-    if (side)
+
+    if (side) {
       inventorySlice.caseReducers.setupInventory(state, {
         type: 'setupInventory',
         payload: { [side]: { ...state[side], ...inventory } },
       });
+    }
   }
+
   if (action.payload.items) {
     if (!Array.isArray(action.payload.items)) action.payload.items = [action.payload.items];
     const curTime = Math.floor(Date.now() / 1000);

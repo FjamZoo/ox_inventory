@@ -6,7 +6,10 @@ export const recoverItem = createAsyncThunk(
   async (data: { fromType: string; recoveryId: string; toSlot?: number; rotated?: boolean }, { rejectWithValue }) => {
     try {
       const response = await fetchNui<boolean>('recoverItem', data);
-      if (response !== true) return rejectWithValue(false);
+
+      if (response !== true) {
+        return rejectWithValue(false);
+      }
     } catch {
       return rejectWithValue(false);
     }

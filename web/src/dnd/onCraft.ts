@@ -7,6 +7,7 @@ import { assessPlacement } from '../helpers/grid';
 
 export const onCraft = (source: DragSource, target: DropTarget) => {
   const { inventory: state } = store.getState();
+
   if (state.isBusy || target.inventory !== 'player') return;
 
   const sourceInventory = state.rightInventory;
@@ -38,7 +39,9 @@ export const onCraft = (source: DragSource, target: DropTarget) => {
     rotated,
     definitions: Items,
   });
+
   if (!placement.valid) return;
+
   const data = {
     fromSlot: sourceSlot,
     toSlot: targetSlot,

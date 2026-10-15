@@ -100,9 +100,9 @@ local currentInventory = defaultInventory
 local function inventoryView(inventory)
     inventory.grid = inventory.grid or { columns = 5, cells = inventory.slots }
     inventory.recovery = inventory.recovery or {}
+
     return inventory
 end
-
 
 local function closeTrunk()
 	if currentInventory.type == 'trunk' then
@@ -411,7 +411,7 @@ lib.callback.register('ox_inventory:usingItem', function(data, noAnim)
 			prop = item.prop --[[@as ProgressProps]]
 		})) and not PlayerData.dead
 
-        return success
+		return success
 	end
 end)
 
@@ -465,8 +465,15 @@ local function useItem(data, cb, noAnim)
 
     if result then
         local item = Items[slotData.name]?.client
-        if item?.notification then lib.notify({ description = item.notification }) end
-        if item?.status and client.setPlayerStatus then client.setPlayerStatus(item.status) end
+
+        if item?.notification then
+            lib.notify({ description = item.notification })
+        end
+
+        if item?.status and client.setPlayerStatus then
+            client.setPlayerStatus(item.status)
+        end
+
         TriggerEvent('ox_inventory:usedItem', slotData.name, slotData.slot, next(slotData.metadata) and slotData.metadata)
     end
 
@@ -623,7 +630,17 @@ local function useSlot(slot, noAnim)
 
 					if newAmmo == currentAmmo then return end
 
-                    if not lib.callback.await('ox_inventory:updateWeapon', false, 'load', newAmmo, false, currentWeapon.metadata.specialAmmo) then return end
+                    local loaded = lib.callback.await(
+                        'ox_inventory:updateWeapon',
+                        false,
+                        'load',
+                        newAmmo,
+                        false,
+                        currentWeapon.metadata.specialAmmo
+                    )
+
+                    if not loaded then return end
+
                     AddAmmoToPed(playerPed, currentWeapon.hash, addAmmo)
 
 					if cache.vehicle then
@@ -653,7 +670,6 @@ local function useSlot(slot, noAnim)
 							end
 						end)
 					end
-
 
 				end)
 			elseif data.component then
@@ -929,6 +945,7 @@ local function updateInventory(data, weight, weaponSlot)
 			currentWeapon = Weapon.Disarm(currentWeapon, true)
 		end
 	end
+
 	local changes = {}
     ---@type table<string, number>
 	local itemCount = {}
@@ -1002,23 +1019,33 @@ local function updateInventory(data, weight, weaponSlot)
 end
 
 RegisterNetEvent('ox_inventory:updateSlots', function(items, weights, weaponSlot)
-	if source ~= '' then updateInventory(items, weights, weaponSlot) end
+	if source ~= '' then
+		updateInventory(items, weights, weaponSlot)
+	end
 end)
 
 RegisterNetEvent('ox_inventory:syncInventory', function(data)
     if source == '' or type(data) ~= 'table' then return end
+
     local ownInventory = data.id == cache.serverId
+
     if not ownInventory and (not invOpen or data.id ~= currentInventory.id) then return end
 
     inventoryView(data)
+
     if ownInventory then
         local updates = {}
+
         for slot in pairs(PlayerData.inventory) do
-            if not data.items[slot] then updates[#updates + 1] = { item = { slot = slot }, inventory = cache.serverId } end
+            if not data.items[slot] then
+                updates[#updates + 1] = { item = { slot = slot }, inventory = cache.serverId }
+            end
         end
+
         for _, item in pairs(data.items) do
             updates[#updates + 1] = { item = item, inventory = cache.serverId }
         end
+
         updateInventory(updates, data.weight)
         PlayerData.grid = data.grid
         PlayerData.recovery = data.recovery
@@ -1026,8 +1053,12 @@ RegisterNetEvent('ox_inventory:syncInventory', function(data)
         data.type = 'player'
     else
         data.type = currentInventory.type
-        for key, value in pairs(data) do currentInventory[key] = value end
+
+        for key, value in pairs(data) do
+            currentInventory[key] = value
+        end
     end
+
     SendNUIMessage({ action = 'refreshSlots', data = { inventory = data } })
 end)
 
@@ -1674,6 +1705,7 @@ end)
 
 RegisterNUICallback('getItemData', function(itemName, cb)
 	local item = type(itemName) == 'string' and Items[itemName]
+
     cb(item or false)
 end)
 
@@ -1863,7 +1895,10 @@ local swapActive = false
 RegisterNUICallback('swapItems', function(data, cb)
     if swapActive or not invOpen or invBusy or usingItem then return cb(false) end
 
-    if type(data) ~= 'table' or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then return cb(false) end
+    if type(data) ~= 'table' or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then
+        return cb(false)
+    end
+
     swapActive = true
 
 	if data.toType == 'newdrop' then
@@ -1921,18 +1956,33 @@ RegisterNUICallback('swapItems', function(data, cb)
 end)
 
 RegisterNUICallback('recoverItem', function(data, cb)
-    if swapActive or not invOpen or invBusy or usingItem then return cb(false) end
-    if type(data) ~= 'table' or type(data.fromType) ~= 'string' or type(data.recoveryId) ~= 'string'
-        or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then return cb(false) end
+    if swapActive or not invOpen or invBusy or usingItem then
+        return cb(false)
+    end
+
+    if type(data) ~= 'table' or type(data.fromType) ~= 'string' or type(data.recoveryId) ~= 'string' then
+        return cb(false)
+    end
+
+    if data.rotated ~= nil and type(data.rotated) ~= 'boolean' then
+        return cb(false)
+    end
+
     swapActive = true
+
     local success = lib.callback.await('ox_inventory:recoverItem', false, data)
+
     swapActive = false
     cb(success or false)
 end)
 
 RegisterNUICallback('buyItem', function(data, cb)
-    if swapActive or not invOpen or invBusy or usingItem then return cb(false) end
+    if swapActive or not invOpen or invBusy or usingItem then
+        return cb(false)
+    end
+
     swapActive = true
+
 	---@type boolean, false | { [1]: number, [2]: SlotWithItem, [3]: SlotWithItem | false, [4]: number}, NotifyProps
 	local response, data, message = lib.callback.await('ox_inventory:buyItem', 100, data)
 
@@ -1968,18 +2018,33 @@ RegisterNUICallback('buyItem', function(data, cb)
 end)
 
 RegisterNUICallback('craftItem', function(data, cb)
-    if swapActive or not invOpen or invBusy or usingItem or currentInventory.type ~= 'crafting' then return cb(false) end
-    if type(data) ~= 'table' or type(data.count) ~= 'number' or data.count < 1 or data.count % 1 ~= 0 then return cb(false) end
+    if swapActive or not invOpen or invBusy or usingItem or currentInventory.type ~= 'crafting' then
+        return cb(false)
+    end
+
+    if type(data) ~= 'table' or type(data.count) ~= 'number' or data.count < 1 or data.count % 1 ~= 0 then
+        return cb(false)
+    end
+
     swapActive = true
 
 	local id, index = currentInventory.id, currentInventory.index
     local completed = true
 
 	for i = 1, data.count do
-		local success, response = lib.callback.await('ox_inventory:craftItem', 200, id, index, data.fromSlot, data.toSlot, data.rotated)
+		local success, response = lib.callback.await(
+            'ox_inventory:craftItem',
+            200,
+            id,
+            index,
+            data.fromSlot,
+            data.toSlot,
+            data.rotated
+        )
 
 		if not success then
             completed = false
+
 			if response then lib.notify({ type = 'error', description = locale(response or 'cannot_perform') }) end
 			break
 		end

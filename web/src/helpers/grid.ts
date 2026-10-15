@@ -13,15 +13,25 @@ export const getFootprint = (size: Size = { width: 1, height: 1 }, rotated = fal
 export const getOccupiedCells = (grid: Grid, slot: number, size?: Size, rotated = false): number[] | null => {
   const { width, height } = getFootprint(size, rotated);
   const column = (slot - 1) % grid.columns;
-  if (!Number.isInteger(slot) || slot < 1 || column + width > grid.columns) return null;
+
+  if (!Number.isInteger(slot) || slot < 1 || column + width > grid.columns) {
+    return null;
+  }
+
   const cells: number[] = [];
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const cell = slot + y * grid.columns + x;
-      if (cell > grid.cells) return null;
+
+      if (cell > grid.cells) {
+        return null;
+      }
+
       cells.push(cell);
     }
   }
+
   return cells;
 };
 
@@ -42,7 +52,9 @@ export const canPlace = (
   ignoredAnchors: number[] = []
 ): boolean => {
   const cells = getOccupiedCells(grid, toSlot, item.name ? definitions[item.name]?.size : undefined, rotated);
+
   if (!cells) return false;
+
   const occupied = new Set(
     items.flatMap((other) =>
       other.name && !ignoredAnchors.includes(other.slot)
@@ -50,6 +62,7 @@ export const canPlace = (
         : []
     )
   );
+
   return cells.every((cell) => !occupied.has(cell));
 };
 
@@ -72,16 +85,22 @@ const catalogueDestination = (
       ? Object.entries(source.ingredients ?? {}).filter(([, amount]) => amount >= 1)
       : [[source.currency ?? 'money', (source.price ?? 0) * count] satisfies [string, number]];
   const items = inventory.items.map((item) => ({ ...item }));
+
   for (const [name, required] of debits) {
     let remaining = required;
+
     for (const item of items) {
       if (item.name !== name || !item.count || remaining <= 0) continue;
+
       const debit = Math.min(item.count, remaining);
+
       item.count -= debit;
       remaining -= debit;
+
       if (item.count === 0) item.name = undefined;
     }
   }
+
   return { ...inventory, items };
 };
 
@@ -125,13 +144,15 @@ export const assessPlacement = ({
     .flat()
     .filter((cell) => cell <= grid.cells);
   const result: Placement = { valid: false, anchor, cells: cells.length ? cells : clippedCells, kind: 'move' };
-  if (
-    !source.name ||
-    count < 1 ||
-    (!catalogue && count > (source.count ?? 0)) ||
-    ['shop', 'crafting', 'inspect'].includes(targetInventory.type)
-  )
+
+  if (!source.name || count < 1 || (!catalogue && count > (source.count ?? 0))) {
     return result;
+  }
+
+  if (['shop', 'crafting', 'inspect'].includes(targetInventory.type)) {
+    return result;
+  }
+
   const fullMove = !catalogue && count === source.count;
   const ignored = sameInventory && fullMove ? [source.slot] : [];
 
@@ -145,12 +166,11 @@ export const assessPlacement = ({
         canPlace(grid, targetInventory.items, source, anchor, rotated, definitions, ignored),
     };
   }
-  if (
-    target &&
-    definitions[source.name]?.stack &&
-    source.name === target.name &&
-    isEqual(source.metadata, target.metadata)
-  ) {
+
+  const canStack =
+    target && definitions[source.name]?.stack && source.name === target.name && isEqual(source.metadata, target.metadata);
+
+  if (canStack) {
     return {
       ...result,
       kind: 'stack',
@@ -158,11 +178,14 @@ export const assessPlacement = ({
       cells: getOccupiedCells(grid, target.slot, definitions[source.name]?.size, target.rotated) ?? [target.slot],
     };
   }
+
   if (!target) {
     const fits = canPlace(grid, destination.items, source, anchor, rotated, definitions, ignored);
+
     return catalogue && !fits && cells.length ? { ...result, valid: true, pending: true } : { ...result, valid: fits };
   }
-  if (catalogue)
+
+  if (catalogue) {
     return {
       ...result,
       anchor: toSlot,
@@ -172,8 +195,14 @@ export const assessPlacement = ({
       valid: getOccupiedCells(grid, toSlot, source.name ? definitions[source.name]?.size : undefined, rotated) !== null,
       pending: true,
     };
+  }
+
   result.kind = 'swap';
-  if (!fullMove) return result;
+
+  if (!fullMove) {
+    return result;
+  }
+
   const targetIgnored = sameInventory ? [source.slot, target.slot] : [target.slot];
   const sourceIgnored = sameInventory ? targetIgnored : [source.slot];
   const targetCells = getOccupiedCells(
@@ -182,6 +211,7 @@ export const assessPlacement = ({
     target.name ? definitions[target.name]?.size : undefined,
     target.rotated
   );
+
   result.valid =
     canPlace(grid, targetInventory.items, source, anchor, rotated, definitions, targetIgnored) &&
     canPlace(
@@ -194,6 +224,7 @@ export const assessPlacement = ({
       sourceIgnored
     ) &&
     (!sameInventory || (!!targetCells && cells.every((cell) => !targetCells.includes(cell))));
+
   return result;
 };
 
@@ -205,11 +236,18 @@ export const findPlacement = (
 ): number | undefined => {
   if (item.name && definitions[item.name]?.stack) {
     const stack = inventory.items.find((other) => other.name === item.name && isEqual(other.metadata, item.metadata));
-    if (stack) return stack.slot;
+
+    if (stack) {
+      return stack.slot;
+    }
   }
+
   const grid = getGrid(inventory);
+
   for (let slot = 1; slot <= grid.cells; slot++) {
-    if (canPlace(grid, inventory.items, item, slot, rotated, definitions)) return slot;
+    if (canPlace(grid, inventory.items, item, slot, rotated, definitions)) {
+      return slot;
+    }
   }
 };
 
@@ -218,23 +256,29 @@ export const packCatalogue = (inventory: Inventory, definitions: Definitions) =>
   const occupied = new Set<number>();
   const entries: Array<{ item: Slot; anchor: number; width: number; height: number }> = [];
   let lastCell = 0;
+
   for (const item of inventory.items) {
     if (!item.name) continue;
+
     const original = getFootprint(definitions[item.name]?.size, item.rotated);
     const rotated = original.width > columns && original.height <= columns ? !item.rotated : !!item.rotated;
     const size = getFootprint(definitions[item.name]?.size, rotated);
     const displaySize = { width: Math.min(size.width, columns), height: size.height };
     let anchor = 1;
+
     while (true) {
       const cells = getOccupiedCells({ columns, cells: Number.MAX_SAFE_INTEGER }, anchor, displaySize);
+
       if (cells && cells.every((cell) => !occupied.has(cell))) {
         cells.forEach((cell) => occupied.add(cell));
         lastCell = Math.max(lastCell, ...cells);
         entries.push({ item, anchor, ...displaySize });
         break;
       }
+
       anchor++;
     }
   }
+
   return { entries, cells: Math.ceil(lastCell / columns) * columns, columns };
 };

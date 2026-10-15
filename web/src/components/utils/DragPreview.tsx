@@ -37,6 +37,7 @@ const DragPreview: React.FC = () => {
   if (!isDragging || !data?.item) return null;
 
   const size = getFootprint(Items[data.item.name]?.size, rotated ?? data.rotated);
+
   return (
     <div
       className="item-drag-preview"

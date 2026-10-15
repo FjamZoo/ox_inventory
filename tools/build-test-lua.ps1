@@ -10,8 +10,10 @@ $glmRevision = 'c1b4c6b60135d5c286052b4affaf5b330a057c8c'
 
 if (-not $VcVarsPath) {
     $vswherePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+
     if (Test-Path -LiteralPath $vswherePath) {
         $installationPath = & $vswherePath -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+
         if ($installationPath) {
             $VcVarsPath = Join-Path $installationPath 'VC/Auxiliary/Build/vcvars64.bat'
         }
@@ -52,9 +54,25 @@ $compileLines = @(
 )
 Set-Content -LiteralPath $compileScript -Value $compileLines -Encoding ascii
 & $env:ComSpec /d /c $compileScript
-if ($LASTEXITCODE -ne 0) { throw "CfxLua compilation failed with exit code $LASTEXITCODE. Sources remain at $buildRoot" }
 
-& $executable -e 'local count = 1; count += 1; local value = {}; assert(value.missing?.field == nil); assert(count == 2); assert(type(vector3(0, 0, 0)) == "vector3"); print(_VERSION)'
-if ($LASTEXITCODE -ne 0) { throw 'The built interpreter failed its CfxLua syntax smoke check.' }
+if ($LASTEXITCODE -ne 0) {
+    throw "CfxLua compilation failed with exit code $LASTEXITCODE. Sources remain at $buildRoot"
+}
+
+$smokeCheck = @'
+local count = 1
+count += 1
+
+local value = {}
+assert(value.missing?.field == nil)
+assert(count == 2)
+assert(type(vector3(0, 0, 0)) == "vector3")
+print(_VERSION)
+'@
+& $executable -e $smokeCheck
+
+if ($LASTEXITCODE -ne 0) {
+    throw 'The built interpreter failed its CfxLua syntax smoke check.'
+}
 
 Write-Output $executable

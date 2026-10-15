@@ -20,6 +20,7 @@ window.XMLHttpRequest = window.fetch;
 const resourceName = (window as any).GetParentResourceName ? (window as any).GetParentResourceName() : 'ox_inventory';
 
 let fixture: ((eventName: string, data: unknown) => unknown) | undefined;
+
 export const setNuiFixture = (handler: typeof fixture) => {
   fixture = handler;
 };

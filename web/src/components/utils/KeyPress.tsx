@@ -17,13 +17,18 @@ const KeyPress: React.FC = () => {
   useEffect(() => {
     const rotate = (event: KeyboardEvent) => {
       if (event.code !== 'KeyR' || event.repeat || !manager.getMonitor().isDragging()) return;
+
       const source: DragSource | null = manager.getMonitor().getItem();
+
       if (!source) return;
+
       event.preventDefault();
       source.rotated = !source.rotated;
       dispatch(setDragRotated(source.rotated));
     };
+
     window.addEventListener('keydown', rotate);
+
     return () => window.removeEventListener('keydown', rotate);
   }, [manager, dispatch]);
 

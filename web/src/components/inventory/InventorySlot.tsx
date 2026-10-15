@@ -45,9 +45,13 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
         isDragging: monitor.isDragging(),
       }),
       item: () => {
-        if (!isSlotWithItem(item, inventoryType !== InventoryType.SHOP)) return null;
+        if (!isSlotWithItem(item, inventoryType !== InventoryType.SHOP)) {
+          return null;
+        }
+
         dispatch(setDragRotated(!!item.rotated));
         dispatch(closeTooltip());
+
         return {
           inventory: inventoryType,
           item: { name: item.name, slot: item.slot },

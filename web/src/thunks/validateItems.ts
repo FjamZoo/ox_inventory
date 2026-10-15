@@ -18,7 +18,9 @@ export const validateMove = createAsyncThunk(
     try {
       const response = await fetchNui<boolean | number>('swapItems', data);
 
-      if (response !== true && typeof response !== 'number') return rejectWithValue(false);
+      if (response !== true && typeof response !== 'number') {
+        return rejectWithValue(false);
+      }
 
       if (typeof response === 'number') dispatch(setContainerWeight(response));
     } catch (error) {

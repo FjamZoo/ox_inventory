@@ -19,8 +19,10 @@ const gridStyle = (anchor: number, columns: number, width = 1, height = 1): Reac
 });
 
 const recoveryName = (record: unknown) => {
-  if (record && typeof record === 'object' && 'name' in record && typeof record.name === 'string')
+  if (record && typeof record === 'object' && 'name' in record && typeof record.name === 'string') {
     return Items[record.name]?.label ?? record.name;
+  }
+
   return Locale.ui_unknown_item || 'Unknown item';
 };
 
@@ -54,24 +56,30 @@ const InventoryGrid: React.FC<{ inventory: Inventory }> = ({ inventory }) => {
 
   const placementAt = (source: DragSource, point: XYCoord | null) => {
     const element = contentRef.current;
+
     if (!element || !point || catalogue || state.isBusy) return;
+
     const rect = element.getBoundingClientRect();
     const viewport = element.parentElement?.getBoundingClientRect();
-    if (
-      viewport &&
-      (point.x < viewport.left || point.x >= viewport.right || point.y < viewport.top || point.y >= viewport.bottom)
-    )
-      return;
+
+    if (viewport && (point.x < viewport.left || point.x >= viewport.right)) return;
+
+    if (viewport && (point.y < viewport.top || point.y >= viewport.bottom)) return;
+
     const css = getComputedStyle(element);
     const gap = parseFloat(css.columnGap) || 0;
     const rowHeight = parseFloat(css.gridAutoRows) + (parseFloat(css.rowGap) || 0);
     const column = Math.floor((point.x - rect.left) / ((rect.width + gap) / layout.columns));
     const row = Math.floor((point.y - rect.top) / rowHeight);
     const cell = row * layout.columns + column + 1;
+
     if (column < 0 || column >= layout.columns || row < 0 || cell > layout.cells) return;
+
     const { sourceInventory } = getTargetInventory(state, source.inventory);
     const sourceItem = sourceInventory.items[source.item.slot - 1];
+
     if (!sourceItem?.name) return;
+
     const isCatalogue = source.inventory === 'shop' || source.inventory === 'crafting';
     const requested = state.itemAmount || 1;
     const count = isCatalogue
@@ -79,6 +87,7 @@ const InventoryGrid: React.FC<{ inventory: Inventory }> = ({ inventory }) => {
         ? Math.min(requested, sourceItem.count)
         : requested
       : getMoveCount(sourceItem.count ?? 1, state.itemAmount, state.shiftPressed);
+
     return assessPlacement({
       sourceInventory,
       targetInventory: inventory,
@@ -96,8 +105,11 @@ const InventoryGrid: React.FC<{ inventory: Inventory }> = ({ inventory }) => {
       canDrop: (source, monitor) => placementAt(source, monitor.getClientOffset())?.valid === true,
       drop: (source, monitor) => {
         const placement = placementAt(source, monitor.getClientOffset());
+
         if (!placement?.valid) return;
+
         const target = { inventory: inventory.type, item: { slot: placement.anchor } };
+
         if (source.inventory === 'shop') onBuy(source, target);
         else if (source.inventory === 'crafting') onCraft(source, target);
         else onDrop(source, target);

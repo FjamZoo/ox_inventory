@@ -25,8 +25,10 @@ page.on('pageerror', (error) => errors.push(error.message));
 
 async function open(accept = true) {
   const url = new URL(process.env.NUI_URL || 'http://localhost:5173/');
+
   if (accept) url.searchParams.set('fixture', 'accept');
   else url.searchParams.delete('fixture');
+
   await page.goto(url.href);
   await page.locator('.inventory-slot').first().waitFor();
   await page.addStyleTag({ content: '#root { background: #20252c !important; }' });
@@ -36,24 +38,36 @@ const slot = (inventory, anchor) => page.locator(`[data-inventory="fixture-${inv
 
 async function target(grid, cell) {
   const rect = await page.locator('.inventory-grid-content').nth(grid).locator(`[data-cell="${cell}"]`).boundingBox();
+
   assert(rect, 'destination cell is visible');
+
   return { x: rect.x + 20, y: rect.y + 20 };
 }
 
 async function drag(inventory, anchor, grid, cell, rotate = false) {
   const source = await slot(inventory, anchor).boundingBox();
+
   assert(source, 'source item is visible');
+
   await page.mouse.move(source.x + 30, source.y + 30);
   await page.mouse.down();
   await page.mouse.move(source.x + 45, source.y + 45, { steps: 4 });
+
   const destination = await target(grid, cell);
+
   await page.mouse.move(destination.x, destination.y, { steps: 12 });
+
   if (rotate) await page.keyboard.press('r');
+
   await page.locator('.inventory-placement').first().waitFor();
+
   if (rotate) {
-    await page.waitForFunction(() => new Set(
-      [...document.querySelectorAll('.inventory-placement.valid')].map((element) => element.style.gridRow)
-    ).size === 4);
+    await page.waitForFunction(
+      () =>
+        new Set(
+          [...document.querySelectorAll('.inventory-placement.valid')].map((element) => element.style.gridRow)
+        ).size === 4
+    );
   }
 }
 
@@ -64,7 +78,10 @@ try {
   await page.screenshot({ path: join(screenshots, 'initial.png') });
   await drag('player', 1, 1, 1, true);
   assert.equal(await page.locator('.inventory-placement.valid').count(), 8);
-  const previewRows = await page.locator('.inventory-placement.valid').evaluateAll((elements) => elements.map((element) => element.style.gridRow));
+  const previewRows = await page
+    .locator('.inventory-placement.valid')
+    .evaluateAll((elements) => elements.map((element) => element.style.gridRow));
+
   assert.equal(new Set(previewRows).size, 4);
   await page.screenshot({ path: join(screenshots, 'rotated-preview.png') });
   await page.mouse.up();

@@ -115,8 +115,10 @@ local function craftCommands(inv, recipe, credits)
 
         for slot = 1, inv.slots do
             local record = inv.items[slot]
+
             if record and record.name == name then
                 local value = record.metadata.durability
+
                 if needs == 0 then
                     if not value or value > 100 and value > os.time() or value > 0 and value <= 100 then
                         found = true
@@ -124,17 +126,40 @@ local function craftCommands(inv, recipe, credits)
                     end
                 elseif needs < 1 then
                     local item = Items(name)
-                    local available = value and (value > 100 and ((value - os.time()) / ((record.metadata.degrade or item.degrade or 1) * 60)) or value / 100)
+                    local available = value
+
+                    if value then
+                        if value > 100 then
+                            available = (value - os.time()) / ((record.metadata.degrade or item.degrade or 1) * 60)
+                        else
+                            available = value / 100
+                        end
+                    end
+
                     if available and available >= needs then
-                        durability[#durability + 1] = { kind = 'durability', inventory = inv, slot = slot, amount = needs }
+                        durability[#durability + 1] = {
+                            kind = 'durability',
+                            inventory = inv,
+                            slot = slot,
+                            amount = needs,
+                        }
                         found = true
                         break
                     end
                 else
                     if not Grid.Integer(needs) then return end
+
                     local count = math.min(remaining, record.count)
-                    commands[#commands + 1] = { kind = 'remove', inventory = inv, name = name, count = count, slot = slot }
+
+                    commands[#commands + 1] = {
+                        kind = 'remove',
+                        inventory = inv,
+                        name = name,
+                        count = count,
+                        slot = slot,
+                    }
                     remaining -= count
+
                     if remaining == 0 then
                         found = true
                         break
@@ -142,10 +167,13 @@ local function craftCommands(inv, recipe, credits)
                 end
             end
         end
+
         if not found then return end
     end
 
-    for _, command in ipairs(durability) do commands[#commands + 1] = command end
+    for _, command in ipairs(durability) do
+        commands[#commands + 1] = command
+    end
 
     for _, command in ipairs(credits) do
         command = table.clone(command)
@@ -157,36 +185,89 @@ local function craftCommands(inv, recipe, credits)
 end
 
 lib.callback.register('ox_inventory:craftItem', function(source, id, index, recipeId, toSlot, rotated)
-    if (type(id) ~= 'string' and not Grid.Integer(id)) or not Grid.Integer(index) or not Grid.Integer(recipeId)
-        or (toSlot ~= nil and not Grid.Integer(toSlot)) or (rotated ~= nil and type(rotated) ~= 'boolean') then return false end
+    if type(id) ~= 'string' and not Grid.Integer(id) then return false end
+
+    if not Grid.Integer(index) or not Grid.Integer(recipeId) then return false end
+
+    if toSlot ~= nil and not Grid.Integer(toSlot) then return false end
+
+    if rotated ~= nil and type(rotated) ~= 'boolean' then return false end
+
     local inv, bench = Inventory(source), CraftingBenches[id]
+
     if not inv or not craftingAccess(source, inv, bench, index) then return false end
+
     local recipe = bench.items[recipeId]
+
     if not recipe then return false end
+
     local expectedRecipe = table.deepclone(recipe)
     local item = Items(recipe.name)
+
     if not item then return false end
-    local count = type(recipe.count) == 'number' and recipe.count or type(recipe.count) == 'table' and math.random(recipe.count[1], recipe.count[2]) or 1
+
+    local count = 1
+
+    if type(recipe.count) == 'number' then
+        count = recipe.count
+    elseif type(recipe.count) == 'table' then
+        count = math.random(recipe.count[1], recipe.count[2])
+    end
+
     if not Grid.Integer(count) then return false end
+
     local credits, err = Inventory.PrepareItems(inv, item, count, recipe.metadata or {}, toSlot, rotated)
-    if not credits then return false, err end
+
+    if not credits then
+        return false, err
+    end
+
     local commands = craftCommands(inv, recipe, credits)
+
     if not commands then return false end
+
     local plan
+
     plan, err = Inventory.Assess(commands)
-    if not plan then return false, err end
+
+    if not plan then
+        return false, err
+    end
+
     if not lib.callback.await('ox_inventory:startCrafting', source, id, recipeId) then return false end
-    if Inventory(source) ~= inv or CraftingBenches[id] ~= bench or not craftingAccess(source, inv, bench, index)
-        or not table.matches(bench.items[recipeId], expectedRecipe) then return false end
+
+    if Inventory(source) ~= inv or CraftingBenches[id] ~= bench then return false end
+
+    if not craftingAccess(source, inv, bench, index) then return false end
+
+    if not table.matches(bench.items[recipeId], expectedRecipe) then return false end
+
     commands = craftCommands(inv, recipe, credits)
+
     if not commands then return false end
+
     plan, err = Inventory.Assess(commands)
-    if not plan then return false, err end
+
+    if not plan then
+        return false, err
+    end
+
     local hooks <close> = TriggerEventHooks('craftItem', {
-        source = source, benchId = id, benchIndex = index, recipe = recipe, toInventory = inv.id, toSlot = toSlot,
+        source = source,
+        benchId = id,
+        benchIndex = index,
+        recipe = recipe,
+        toInventory = inv.id,
+        toSlot = toSlot,
     })
+
     if not hooks.success then return false end
+
     local success, response = Inventory.Apply(plan)
-    if not success then hooks.success = false end
+
+    if not success then
+        hooks.success = false
+    end
+
     return success, response
 end)

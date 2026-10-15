@@ -23,7 +23,9 @@ local Utils = require 'modules.utils.server'
 function server.setPlayerInventory(player, data)
     while not shared.ready do Wait(0) end
 
-    if shared.framework == 'esx' then data = db.loadPlayerGrid(player.identifier) or data end
+    if shared.framework == 'esx' then
+        data = db.loadPlayerGrid(player.identifier) or data
+    end
 
     if not data then
         data = db.loadPlayer(player.identifier)
@@ -31,24 +33,40 @@ function server.setPlayerInventory(player, data)
 
     if type(data) == 'table' and server.convertInventory then
         local legacy = next(data) ~= nil
+
         for _, record in pairs(data) do
             if type(record) ~= 'number' then
                 legacy = false
                 break
             end
         end
-        if legacy then data = server.convertInventory(player.source, data) end
+
+        if legacy then
+            data = server.convertInventory(player.source, data)
+        end
     end
+
     player.source = tonumber(player.source)
-    local inv = Inventory.Create(player.source, player.name, 'player', shared.playerslots, 0,
-        shared.playerweight, player.identifier, data or {})
+
+    local inv = Inventory.Create(
+        player.source,
+        player.name,
+        'player',
+        shared.playerslots,
+        0,
+        shared.playerweight,
+        player.identifier,
+        data or {}
+    )
 
     if inv then
         if shared.framework == 'esx' and not Inventory.PersistPlayer(inv) then
             Inventory.Remove(inv)
             return error('Unable to persist authoritative player grid')
         end
+
         if Inventory(player.source) ~= inv then return end
+
         inv.player = server.setPlayerData(player)
 
         repeat
@@ -60,8 +78,16 @@ function server.setPlayerInventory(player, data)
         until inv.player.ped ~= 0
 
         if server.syncInventory then server.syncInventory(inv) end
-        TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inv.items, inv.weight,
-            inv.player, inv.grid, inv.recovery)
+        TriggerClientEvent(
+            'ox_inventory:setPlayerInventory',
+            player.source,
+            Inventory.Drops,
+            inv.items,
+            inv.weight,
+            inv.player,
+            inv.grid,
+            inv.recovery
+        )
     end
 end
 
@@ -408,6 +434,7 @@ local GetLocks = require 'modules.locks'
 ---@return table | boolean | nil
 lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, metadata, noAnim)
     if type(itemName) ~= 'string' or (slot ~= nil and not Grid.Integer(slot)) then return false end
+
     local inventory = Inventory(source)
 
     if inventory and not inventory.usingItem and inventory.player then
@@ -447,7 +474,12 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                     { type = 'error', description = locale('not_enough_durability', label) })
             end
 
-            if data.count > 1 and consume < 1 and consume > 0 and not Inventory.Assess({ { kind = 'durability', inventory = inventory, slot = data.slot, amount = consume } }) then
+            local needsSplit = data.count > 1 and consume < 1 and consume > 0
+            local plan = needsSplit and Inventory.Assess({
+                { kind = 'durability', inventory = inventory, slot = data.slot, amount = consume }
+            })
+
+            if needsSplit and not plan then
                 return TriggerClientEvent('ox_lib:notify', source,
                     { type = 'error', description = locale('cannot_use', label) })
             end
@@ -509,7 +541,12 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 consume = consume
             })
 
-            if not hooks.success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then
+            if not hooks.success or Inventory(source) ~= inventory then
+                hooks.success = false
+                return false
+            end
+
+            if not table.matches(inventory.items[slot], expectedItem) then
                 hooks.success = false
                 return false
             end
@@ -521,7 +558,12 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 inventory.weapon = success and slot or nil
             end
 
-            if not success or Inventory(source) ~= inventory or not table.matches(inventory.items[slot], expectedItem) then
+            if not success or Inventory(source) ~= inventory then
+                hooks.success = false
+                return false
+            end
+
+            if not table.matches(inventory.items[slot], expectedItem) then
                 hooks.success = false
                 return false
             end
@@ -534,14 +576,27 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                 durability = consume ~= 0 and consume < 1 and data.metadata.durability --[[@as number | false]]
 
                 if durability then
-                    local plan = Inventory.Assess({ { kind = 'durability', inventory = inventory, slot = data.slot, amount = consume } })
+                    local plan = Inventory.Assess({
+                        { kind = 'durability', inventory = inventory, slot = data.slot, amount = consume }
+                    })
+
                     if not plan or not Inventory.Apply(plan) then
                         hooks.success = false
                         return false
                     end
-                elseif not Inventory.RemoveItem(inventory.id, data.name, consume < 1 and 1 or consume, nil, data.slot) then
-                    hooks.success = false
-                    return false
+                else
+                    local removed = Inventory.RemoveItem(
+                        inventory.id,
+                        data.name,
+                        consume < 1 and 1 or consume,
+                        nil,
+                        data.slot
+                    )
+
+                    if not removed then
+                        hooks.success = false
+                        return false
+                    end
                 end
 
                 if item?.cb then
@@ -550,6 +605,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
             end
 
             inventory.usingItem = data
+
             return true
         end
     end

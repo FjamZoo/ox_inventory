@@ -367,8 +367,13 @@ function Inventory.Set(inv, k, v)
 			v *= 1000
 		end
 
-		if k == 'slots' then return Inventory.SetSlotCount(inv, v) end
-        if k == 'maxWeight' then return Inventory.SetMaxWeight(inv, v) end
+		if k == 'slots' then
+		    return Inventory.SetSlotCount(inv, v)
+		end
+        if k == 'maxWeight' then
+            return Inventory.SetMaxWeight(inv, v)
+        end
+
         inv[k] = v
         inv.revision = (inv.revision or 0) + 1
 	end
@@ -393,6 +398,7 @@ end
 ---@param items table<number, SlotWithItem>
 ---@param recovery table[]
 ---@return table[]
+
 local function serialize(items, recovery)
 	local inventory, count = {}, 0
 	for k, v in pairs(items) do
@@ -407,19 +413,25 @@ local function serialize(items, recovery)
 			}
 		end
 	end
-	for _, entry in ipairs(recovery or {}) do inventory[#inventory + 1] = { _gridRecovery = table.deepclone(entry) } end
+	for _, entry in ipairs(recovery or {}) do
+	    inventory[#inventory + 1] = { _gridRecovery = table.deepclone(entry) }
+	end
 	return inventory
 end
 
 local function minimal(inv)
     inv = Inventory(inv)
+
     return serialize(inv.items, inv.recovery)
 end
 
 local Items = require 'modules.items.server'
 
 local function itemDefinition(item)
-    if type(item) == 'table' then item = item.name end
+    if type(item) == 'table' then
+        item = item.name
+    end
+
     return type(item) == 'string' and Items(item) or nil
 end
 
@@ -432,12 +444,30 @@ end
 function Inventory.SetSlot(inv, item, count, metadata, slot, rotated)
     inv = Inventory(inv)
     item = itemDefinition(item)
-    if not inv then return false, 'invalid_inventory' end
-    if not item then return false, 'invalid_item' end
-    if not Grid.Integer(count, -math.huge) or not Grid.Integer(slot) or (rotated ~= nil and type(rotated) ~= 'boolean') then return false, 'invalid_count' end
+
+    if not inv then
+        return false, 'invalid_inventory'
+    end
+
+    if not item then
+        return false, 'invalid_item'
+    end
+
+    if not Grid.Integer(count, -math.huge) or not Grid.Integer(slot) then
+        return false, 'invalid_count'
+    end
+
+    if rotated ~= nil and type(rotated) ~= 'boolean' then
+        return false, 'invalid_count'
+    end
+
     local current = inv.items[slot]
     local newCount = (current and current.count or 0) + count
-    if current and current.name ~= item.name then return false, 'occupied_slot' end
+
+    if current and current.name ~= item.name then
+        return false, 'occupied_slot'
+    end
+
     local record = newCount > 0 and {
         name = item.name,
         count = newCount,
@@ -446,11 +476,26 @@ function Inventory.SetSlot(inv, item, count, metadata, slot, rotated)
         rotated = rotated == nil and current and current.rotated or rotated
     } or nil
 
-    local plan, err = Inventory.Assess({ { kind = 'set', inventory = inv, slot = slot, record = record, acquiring = count > 0 } })
-    if not plan then return false, err end
+    local plan, err = Inventory.Assess({
+        { kind = 'set', inventory = inv, slot = slot, record = record, acquiring = count > 0 }
+    })
+
+    if not plan then
+        return false, err
+    end
+
     local success, response = Inventory.Apply(plan)
-    if not success then return false, response end
-    TriggerClientEvent('ox_inventory:itemNotify', inv.id, { inv.items[slot] or current, count < 0 and 'ui_removed' or 'ui_added', math.abs(count) })
+
+    if not success then
+        return false, response
+    end
+
+    TriggerClientEvent('ox_inventory:itemNotify', inv.id, {
+        inv.items[slot] or current,
+        count < 0 and 'ui_removed' or 'ui_added',
+        math.abs(count)
+    })
+
     return true, inv.items[slot]
 end
 
@@ -525,10 +570,28 @@ function Inventory.CalculateWeight(items)
 end
 
 local function slotRecord(record, slot, allowNonStackCount)
-    if type(record) ~= 'table' or type(record.name) ~= 'string' or not Grid.Integer(record.count) or (record.metadata ~= nil and type(record.metadata) ~= 'table') or (record.rotated ~= nil and type(record.rotated) ~= 'boolean') then return nil, 'invalid_record' end
+    if type(record) ~= 'table' or type(record.name) ~= 'string' or not Grid.Integer(record.count) then
+        return nil, 'invalid_record'
+    end
+
+    if record.metadata ~= nil and type(record.metadata) ~= 'table' then
+        return nil, 'invalid_record'
+    end
+
+    if record.rotated ~= nil and type(record.rotated) ~= 'boolean' then
+        return nil, 'invalid_record'
+    end
+
     local item = Items(record.name)
-    if not item then return nil, 'unknown_item' end
-    if not allowNonStackCount and not item.stack and record.count ~= 1 then return nil, 'invalid_record' end
+
+    if not item then
+        return nil, 'unknown_item'
+    end
+
+    if not allowNonStackCount and not item.stack and record.count ~= 1 then
+        return nil, 'invalid_record'
+    end
+
     local result = {
         name = item.name,
         label = item.label,
@@ -540,92 +603,159 @@ local function slotRecord(record, slot, allowNonStackCount)
         metadata = table.deepclone(record.metadata or {}),
         rotated = record.rotated or nil,
     }
+
     local ok, weight = pcall(Inventory.SlotWeight, item, result)
-    if not ok or type(weight) ~= 'number' or weight ~= weight or weight < 0 or weight == math.huge then return nil, 'invalid_record' end
+
+    if not ok or type(weight) ~= 'number' or weight ~= weight or weight < 0 or weight == math.huge then
+        return nil, 'invalid_record'
+    end
+
     result.weight = weight
+
     return result
 end
 
 local function recoveryWeight(recovery)
     local weight, unknown = 0, false
+
     for i = 1, #recovery do
         local record = slotRecord(recovery[i].record, nil, true)
+
         if record then
             weight += record.weight
         else
             unknown = true
         end
     end
+
     return weight, unknown
 end
 
 function Inventory.Reconcile(records, slots)
     if type(records) == 'string' then
         local ok, decoded = pcall(json.decode, records)
-        if not ok or type(decoded) ~= 'table' then error('Refusing to load malformed inventory JSON', 2) end
+
+        if not ok or type(decoded) ~= 'table' then
+            error('Refusing to load malformed inventory JSON', 2)
+        end
+
         records = decoded
     end
-    if records ~= nil and type(records) ~= 'table' then error('Refusing to load malformed inventory data', 2) end
-    local grid, items, recovery, pending, ordered, usedIds, seenIds = { columns = 5, cells = slots }, {}, {}, {}, {}, {}, {}
+
+    if records ~= nil and type(records) ~= 'table' then
+        error('Refusing to load malformed inventory data', 2)
+    end
+
+    local grid = { columns = 5, cells = slots }
+    local items, recovery, pending, ordered, usedIds, seenIds = {}, {}, {}, {}, {}, {}
     local migrated = false
+
     local function validEnvelope(value)
         return type(value) == 'table' and type(value.id) == 'string' and value.id ~= '' and value.record ~= nil
             and (value.reason == 'unknown_item' or value.reason == 'invalid_record' or value.reason == 'no_space')
     end
-    for key, record in pairs(records or {}) do ordered[#ordered + 1] = { key = key, record = record } end
+
+    for key, record in pairs(records or {}) do
+        ordered[#ordered + 1] = { key = key, record = record }
+    end
+
     table.sort(ordered, function(a, b)
         local aSlot = type(a.record) == 'table' and a.record.slot
         local bSlot = type(b.record) == 'table' and b.record.slot
+
         aSlot, bSlot = Grid.Integer(aSlot) and aSlot or math.huge, Grid.Integer(bSlot) and bSlot or math.huge
-        if aSlot ~= bSlot then return aSlot < bSlot end
-        if type(a.key) == 'number' and type(b.key) == 'number' then return a.key < b.key end
+
+        if aSlot ~= bSlot then
+            return aSlot < bSlot
+        end
+
+        if type(a.key) == 'number' and type(b.key) == 'number' then
+            return a.key < b.key
+        end
+
         return tostring(a.key) < tostring(b.key)
     end)
+
     for i = 1, #ordered do
         local envelope = type(ordered[i].record) == 'table' and ordered[i].record._gridRecovery
-        if validEnvelope(envelope) then usedIds[envelope.id] = true end
+
+        if validEnvelope(envelope) then
+            usedIds[envelope.id] = true
+        end
     end
+
     local nextId = 0
+
     local function recoveryId()
-        repeat nextId += 1 until not usedIds['recovery-' .. nextId]
+        repeat
+            nextId += 1
+        until not usedIds['recovery-' .. nextId]
+
         local id = 'recovery-' .. nextId
+
         usedIds[id] = true
+
         return id
     end
+
     local function preserve(record, reason)
         migrated = true
         recovery[#recovery + 1] = { id = recoveryId(), reason = reason, record = table.deepclone(record) }
     end
+
     local occupied = {}
+
     local function place(record, anchor)
         record.slot = anchor
         items[anchor] = record
-        for _, cell in ipairs(Grid.Cells(grid, Items(record.name).size, anchor, record.rotated)) do occupied[cell] = anchor end
+
+        for _, cell in ipairs(Grid.Cells(grid, Items(record.name).size, anchor, record.rotated)) do
+            occupied[cell] = anchor
+        end
     end
+
     for i = 1, #ordered do
         local original = ordered[i].record
         local envelope = type(original) == 'table' and original._gridRecovery
+
         if validEnvelope(envelope) then
             local entry = table.deepclone(envelope)
+
             if seenIds[envelope.id] then
                 entry.id = recoveryId()
                 migrated = true
             end
+
             seenIds[envelope.id] = true
             recovery[#recovery + 1] = entry
         else
             local record, reason = slotRecord(original)
-            if record and not Grid.Integer(record.slot) then record, reason = nil, 'invalid_record' end
+
+            if record and not Grid.Integer(record.slot) then
+                record, reason = nil, 'invalid_record'
+            end
+
             if record then
-                local ok, metadata = pcall(Items.CheckMetadata, record.metadata, Items(record.name), record.name, os.time())
+                local ok, metadata = pcall(
+                    Items.CheckMetadata,
+                    record.metadata,
+                    Items(record.name),
+                    record.name,
+                    os.time()
+                )
+
                 if ok then
-                    if not table.matches(record.metadata, metadata) then migrated = true end
+                    if not table.matches(record.metadata, metadata) then
+                        migrated = true
+                    end
+
                     record.metadata = metadata
                     record = slotRecord(record)
                 else
                     record, reason = nil, 'invalid_record'
                 end
             end
+
             if not record then
                 preserve(original, reason)
             elseif Grid.Fits(grid, occupied, Items(record.name).size, record.slot, record.rotated) then
@@ -636,21 +766,29 @@ function Inventory.Reconcile(records, slots)
             end
         end
     end
+
     for i = 1, #pending do
         local entry = pending[i]
         local record, size = entry.record, Items(entry.record.name).size
         local anchor = Grid.FirstFit(grid, occupied, size, record.rotated)
+
         if not anchor then
             anchor = Grid.FirstFit(grid, occupied, size, not record.rotated)
-            if anchor then record.rotated = not record.rotated or nil end
+
+            if anchor then
+                record.rotated = not record.rotated or nil
+            end
         end
+
         if anchor then
             place(record, anchor)
         else
             preserve(entry.original, 'no_space')
         end
     end
+
     local weight, unknown = recoveryWeight(recovery)
+
     return items, Inventory.CalculateWeight(items) + weight, recovery, unknown, migrated
 end
 
@@ -670,39 +808,73 @@ end
 
 local function syncSnapshot(inv)
     local snapshot = Inventory.Snapshot(inv)
-    if inv.player then TriggerClientEvent('ox_inventory:syncInventory', inv.id, snapshot) end
+
+    if inv.player then
+        TriggerClientEvent('ox_inventory:syncInventory', inv.id, snapshot)
+    end
+
     for id in pairs(inv.openedBy) do
-        if id ~= inv.id then TriggerClientEvent('ox_inventory:syncInventory', id, snapshot) end
+        if id ~= inv.id then
+            TriggerClientEvent('ox_inventory:syncInventory', id, snapshot)
+        end
     end
 end
 
 local function addRecord(state, record, anchor, rotated)
     record = slotRecord(record)
-    if not record then return nil, 'invalid_item' end
+
+    if not record then
+        return nil, 'invalid_item'
+    end
+
     local item = Items(record.name)
-    if rotated ~= nil then record.rotated = rotated or nil end
-    if anchor ~= nil and not Grid.Integer(anchor) then return nil, 'invalid_slot' end
+
+    if rotated ~= nil then
+        record.rotated = rotated or nil
+    end
+
+    if anchor ~= nil and not Grid.Integer(anchor) then
+        return nil, 'invalid_slot'
+    end
+
     if not anchor and item.stack then
         for i = 1, state.slots do
             local target = state.items[i]
+
             if target and target.name == record.name and table.matches(target.metadata, record.metadata) then
                 anchor = i
                 break
             end
         end
     end
+
     local target = anchor and state.items[anchor]
+
     if target then
-        if not item.stack or target.name ~= record.name or not table.matches(target.metadata, record.metadata) then return nil, 'occupied_slot' end
+        if not item.stack or target.name ~= record.name or not table.matches(target.metadata, record.metadata) then
+            return nil, 'occupied_slot'
+        end
+
         target.count += record.count
+
         return anchor
     end
+
     local occupied = Grid.Occupancy(state.grid, state.items, Items)
-    if not occupied then return nil, 'invalid_grid' end
+
+    if not occupied then
+        return nil, 'invalid_grid'
+    end
+
     anchor = anchor or Grid.FirstFit(state.grid, occupied, item.size, record.rotated)
-    if not anchor or not Grid.Fits(state.grid, occupied, item.size, anchor, record.rotated) then return nil, 'inventory_full' end
+
+    if not anchor or not Grid.Fits(state.grid, occupied, item.size, anchor, record.rotated) then
+        return nil, 'inventory_full'
+    end
+
     record.slot = anchor
     state.items[anchor] = record
+
     return anchor
 end
 
@@ -710,9 +882,12 @@ end
 ---@return table? plan, string? error
 function Inventory.Assess(commands)
     local plan = { states = {}, results = {}, stock = {}, containers = {}, pending = {} }
+
     local function stateFor(value)
         local inv = Inventory(value)
+
         if not inv or inv.storageBusy then return end
+
         if not plan.states[inv] then
             plan.states[inv] = {
                 inventory = inv,
@@ -724,67 +899,159 @@ function Inventory.Assess(commands)
                 grid = { columns = 5, cells = inv.slots }
             }
         end
+
         return plan.states[inv]
     end
+
     for i = 1, #commands do
         local command = commands[i]
         local state = stateFor(command.inventory or command.from)
-        if not state then return nil, 'invalid_inventory' end
-        if command.revision and state.revision ~= command.revision then return nil, 'stale_inventory' end
+
+        if not state then
+            return nil, 'invalid_inventory'
+        end
+
+        if command.revision and state.revision ~= command.revision then
+            return nil, 'stale_inventory'
+        end
+
         if command.kind == 'add' then
             local slot, err = addRecord(state, command.record, command.slot, command.rotated)
-            if not slot then return nil, err end
+
+            if not slot then
+                return nil, err
+            end
+
             state.acquiring = true
             plan.results[#plan.results + 1] = { inventory = state.inventory, slot = slot }
         elseif command.kind == 'remove' then
             local remaining = command.count
-            if not Grid.Integer(remaining, 0) then return nil, 'invalid_count' end
+
+            if not Grid.Integer(remaining, 0) then
+                return nil, 'invalid_count'
+            end
+
             for slot = 1, state.slots do
                 local record = state.items[slot]
-                if remaining > 0 and record and (not command.slot or slot == command.slot) and record.name == command.name and (not command.metadata or (command.strict == false and table.contains or table.matches)(record.metadata, command.metadata)) then
+
+                if remaining > 0 and record then
+                    if command.slot and slot ~= command.slot then
+                        goto continue
+                    end
+
+                    if record.name ~= command.name then
+                        goto continue
+                    end
+
+                    if command.metadata then
+                        local matches = command.strict == false and table.contains or table.matches
+
+                        if not matches(record.metadata, command.metadata) then
+                            goto continue
+                        end
+                    end
+
                     local count = math.min(remaining, record.count)
+
                     record.count -= count
                     remaining -= count
+
                     if record.count == 0 then
                         state.items[slot] = nil
-                        if state.weapon == slot then state.weapon = nil end
+
+                        if state.weapon == slot then
+                            state.weapon = nil
+                        end
                     end
                 end
+
+                ::continue::
             end
-            if remaining > 0 then return nil, 'not_enough_items' end
+
+            if remaining > 0 then
+                return nil, 'not_enough_items'
+            end
         elseif command.kind == 'set' then
-            if not Grid.Integer(command.slot) then return nil, 'invalid_slot' end
+            if not Grid.Integer(command.slot) then
+                return nil, 'invalid_slot'
+            end
+
             local record, err = command.record and slotRecord(command.record, command.slot)
-            if command.record and not record then return nil, err end
-            if state.weapon == command.slot and (not record or record.name ~= state.items[command.slot].name) then state.weapon = nil end
+
+            if command.record and not record then
+                return nil, err
+            end
+
+            if state.weapon == command.slot and (not record or record.name ~= state.items[command.slot].name) then
+                state.weapon = nil
+            end
+
             state.items[command.slot] = record or nil
             state.acquiring = state.acquiring or command.acquiring
         elseif command.kind == 'transfer' then
             local target = stateFor(command.to)
-            if not target then return nil, 'invalid_inventory' end
+
+            if not target then
+                return nil, 'invalid_inventory'
+            end
+
             local from = state.items[command.fromSlot]
-            if not from or not Grid.Integer(command.count) or command.count > from.count then return nil, 'invalid_count' end
-            if not Grid.Integer(command.toSlot) then return nil, 'invalid_slot' end
+
+            if not from or not Grid.Integer(command.count) or command.count > from.count then
+                return nil, 'invalid_count'
+            end
+
+            if not Grid.Integer(command.toSlot) then
+                return nil, 'invalid_slot'
+            end
+
             local destination = target.items[command.toSlot]
-            local exchanging = destination and (command.swap or destination.name ~= from.name or not destination.stack or not table.matches(destination.metadata, from.metadata))
+            local exchanging = destination and (command.swap or destination.name ~= from.name or not destination.stack)
+
+            if destination and not exchanging then
+                exchanging = not table.matches(destination.metadata, from.metadata)
+            end
+
             local wholeItem = command.count == from.count
+
             if state == target and command.fromSlot == command.toSlot then
-                if command.count ~= from.count then return nil, 'invalid_count' end
-                if command.rotated ~= nil then from.rotated = command.rotated or nil end
+                if command.count ~= from.count then
+                    return nil, 'invalid_count'
+                end
+
+                if command.rotated ~= nil then
+                    from.rotated = command.rotated or nil
+                end
             elseif exchanging then
-                if command.count ~= from.count then return nil, 'invalid_count' end
+                if command.count ~= from.count then
+                    return nil, 'invalid_count'
+                end
+
                 state.items[command.fromSlot], target.items[command.toSlot] = nil, nil
                 destination.slot, from.slot = command.fromSlot, command.toSlot
-                if command.rotated ~= nil then from.rotated = command.rotated or nil end
+
+                if command.rotated ~= nil then
+                    from.rotated = command.rotated or nil
+                end
+
                 state.items[command.fromSlot], target.items[command.toSlot] = destination, from
             else
                 local moving = table.deepclone(from)
+
                 moving.count = command.count
                 from.count -= command.count
-                if from.count == 0 then state.items[command.fromSlot] = nil end
+
+                if from.count == 0 then
+                    state.items[command.fromSlot] = nil
+                end
+
                 local slot, err = addRecord(target, moving, command.toSlot, command.rotated)
-                if not slot then return nil, err end
+
+                if not slot then
+                    return nil, err
+                end
             end
+
             if state == target then
                 if state.weapon == command.fromSlot and wholeItem then
                     state.weapon = command.toSlot
@@ -792,80 +1059,156 @@ function Inventory.Assess(commands)
                     state.weapon = command.fromSlot
                 end
             else
-                if state.weapon == command.fromSlot and wholeItem then state.weapon = nil end
-                if target.weapon == command.toSlot and exchanging then target.weapon = nil end
+                if state.weapon == command.fromSlot and wholeItem then
+                    state.weapon = nil
+                end
+
+                if target.weapon == command.toSlot and exchanging then
+                    target.weapon = nil
+                end
+
                 target.acquiring = true
-                if exchanging then state.acquiring = true end
+
+                if exchanging then
+                    state.acquiring = true
+                end
             end
         elseif command.kind == 'durability' then
             local record = state.items[command.slot]
-            if not record then return nil, 'not_enough_items' end
+
+            if not record then
+                return nil, 'not_enough_items'
+            end
+
             local item = Items(record.name)
             local value = record.metadata.durability
-            if type(value) ~= 'number' or value <= 0 then return nil, 'not_enough_durability' end
-            local durability = value > 100 and value - (record.metadata.degrade or item.degrade or 0) * 60 * command.amount or value - command.amount * 100
-            if (value > 100 and durability < os.time()) or (value <= 100 and durability < 0) then return nil, 'not_enough_durability' end
+
+            if type(value) ~= 'number' or value <= 0 then
+                return nil, 'not_enough_durability'
+            end
+
+            local durability
+
+            if value > 100 then
+                durability = value - (record.metadata.degrade or item.degrade or 0) * 60 * command.amount
+            else
+                durability = value - command.amount * 100
+            end
+
+            if (value > 100 and durability < os.time()) or (value <= 100 and durability < 0) then
+                return nil, 'not_enough_durability'
+            end
+
             if record.count > 1 then
                 record.count -= 1
+
                 local split = table.deepclone(record)
+
                 split.count = 1
                 split.metadata.durability = durability
-                if durability > 0 or not item.decay then plan.pending[#plan.pending + 1] = { state = state, record = split } end
+
+                if durability > 0 or not item.decay then
+                    plan.pending[#plan.pending + 1] = { state = state, record = split }
+                end
             elseif durability <= 0 and item.decay then
                 state.items[command.slot] = nil
-                if state.weapon == command.slot then state.weapon = nil end
+
+                if state.weapon == command.slot then
+                    state.weapon = nil
+                end
             else
                 record.metadata.durability = durability
             end
         elseif command.kind == 'resize' or command.kind == 'replace' then
-            if command.slots and not Grid.Integer(command.slots, 0) then return nil, 'invalid_slots' end
+            if command.slots and not Grid.Integer(command.slots, 0) then
+                return nil, 'invalid_slots'
+            end
+
             state.slots = command.slots or state.slots
             state.grid.cells = state.slots
+
             local records = command.records
+
             if not records then
                 records = {}
-                for _, record in pairs(state.items) do records[#records + 1] = record end
-                for _, entry in ipairs(state.recovery) do records[#records + 1] = { _gridRecovery = entry } end
+
+                for _, record in pairs(state.items) do
+                    records[#records + 1] = record
+                end
+
+                for _, entry in ipairs(state.recovery) do
+                    records[#records + 1] = { _gridRecovery = entry }
+                end
             end
+
             state.items, state.weight, state.recovery = Inventory.Reconcile(records, state.slots)
             state.weapon = nil
             state.restore = true
         elseif command.kind == 'recover' then
             local found
+
             for index, entry in ipairs(state.recovery) do
                 if entry.id == command.id then
                     local record = slotRecord(entry.record)
-                    if not record then return nil, entry.reason end
+
+                    if not record then
+                        return nil, entry.reason
+                    end
+
                     local slot, err = addRecord(state, record, command.slot, command.rotated)
+
                     if not slot and command.slot == nil and command.rotated == nil then
                         slot, err = addRecord(state, record, nil, not record.rotated)
                     end
-                    if not slot then return nil, err end
+
+                    if not slot then
+                        return nil, err
+                    end
+
                     table.remove(state.recovery, index)
                     found = true
                     break
                 end
             end
-            if not found then return nil, 'invalid_recovery' end
+
+            if not found then
+                return nil, 'invalid_recovery'
+            end
         else
             return nil, 'invalid_operation'
         end
-        if command.stock then plan.stock[#plan.stock + 1] = command.stock end
+
+        if command.stock then
+            plan.stock[#plan.stock + 1] = command.stock
+        end
     end
+
     for _, pending in ipairs(plan.pending) do
         local slot, err = addRecord(pending.state, pending.record)
-        if not slot then return nil, err end
+
+        if not slot then
+            return nil, err
+        end
     end
+
     local containers = {}
+
     for inv, state in pairs(plan.states) do
-        if inv.type == 'container' then containers[#containers + 1] = state end
+        if inv.type == 'container' then
+            containers[#containers + 1] = state
+        end
     end
+
     for _, container in ipairs(containers) do
         for _, parent in pairs(Inventories) do
             for slot, record in pairs(parent.items) do
                 if record.metadata.container == container.inventory.id then
                     local state = stateFor(parent)
-                    if not state then return nil, 'invalid_inventory' end
+
+                    if not state then
+                        return nil, 'invalid_inventory'
+                    end
+
                     if state.items[slot]?.metadata.container == container.inventory.id then
                         plan.containers[#plan.containers + 1] = { parent = state, slot = slot, container = container }
                     end
@@ -873,39 +1216,75 @@ function Inventory.Assess(commands)
             end
         end
     end
-    for inv, state in pairs(plan.states) do
-        if not Grid.Occupancy(state.grid, state.items, Items) then return nil, 'inventory_full' end
+
+    for _, state in pairs(plan.states) do
+        if not Grid.Occupancy(state.grid, state.items, Items) then
+            return nil, 'inventory_full'
+        end
+
         local weight, unknown = recoveryWeight(state.recovery)
+
         state.unknownWeight = unknown
+
         for slot, record in pairs(state.items) do
             local normalized, err = slotRecord(record, slot)
-            if not normalized then return nil, err end
+
+            if not normalized then
+                return nil, err
+            end
+
             state.items[slot] = normalized
             weight += normalized.weight
         end
+
         state.weight = weight
     end
+
     for _, link in ipairs(plan.containers) do
         local record = link.parent.items[link.slot]
+
         link.parent.weight -= record.weight
         record.metadata.weight = link.container.weight
         record.weight = Inventory.SlotWeight(Items(record.name), record)
         link.parent.weight += record.weight
     end
+
     for inv, state in pairs(plan.states) do
-        if not state.restore and ((state.weight > inv.maxWeight and state.weight > inv.weight) or (inv.unknownWeight and state.acquiring)) then return nil, 'cannot_carry' end
+        if not state.restore then
+            if state.weight > inv.maxWeight and state.weight > inv.weight then
+                return nil, 'cannot_carry'
+            end
+
+            if inv.unknownWeight and state.acquiring then
+                return nil, 'cannot_carry'
+            end
+        end
     end
+
     return plan
 end
 
 function Inventory.Apply(plan)
-    if not plan then return false, 'invalid_plan' end
+    if not plan then
+        return false, 'invalid_plan'
+    end
+
     for inv, state in pairs(plan.states) do
-        if Inventories[inv.id] ~= inv or (inv.revision or 0) ~= state.revision or (inv.storageBusy and not plan.storage) then return false, 'stale_inventory' end
+        if Inventories[inv.id] ~= inv or (inv.revision or 0) ~= state.revision then
+            return false, 'stale_inventory'
+        end
+
+        if inv.storageBusy and not plan.storage then
+            return false, 'stale_inventory'
+        end
     end
+
     for _, stock in ipairs(plan.stock) do
-        if stock.record.count ~= stock.expected or stock.expected < stock.count then return false, 'stale_stock' end
+        if stock.record.count ~= stock.expected or stock.expected < stock.count then
+            return false, 'stale_stock'
+        end
     end
+
     for inv, state in pairs(plan.states) do
         state.previous = inv.items
         inv.items, inv.recovery, inv.weight, inv.unknownWeight = state.items, state.recovery, state.weight, state.unknownWeight
@@ -913,31 +1292,55 @@ function Inventory.Apply(plan)
         inv.weapon = state.weapon
         inv.revision, inv.changed = state.revision + 1, true
     end
-    for _, stock in ipairs(plan.stock) do stock.record.count -= stock.count end
+
+    for _, stock in ipairs(plan.stock) do
+        stock.record.count -= stock.count
+    end
+
     for inv, state in pairs(plan.states) do
         local changes = {}
+
         for slot in pairs(state.previous) do
-            if not inv.items[slot] then changes[#changes + 1] = { item = { slot = slot }, inventory = inv.id } end
+            if not inv.items[slot] then
+                changes[#changes + 1] = { item = { slot = slot }, inventory = inv.id }
+            end
         end
+
         for slot, record in pairs(inv.items) do
-            if not table.matches(record, state.previous[slot]) then changes[#changes + 1] = { item = record, inventory = inv.id } end
+            if not table.matches(record, state.previous[slot]) then
+                changes[#changes + 1] = { item = record, inventory = inv.id }
+            end
         end
+
         inv:syncSlotsWithClients(changes, true, inv.weapon or false)
         syncSnapshot(inv)
+
         if inv.player and server.syncInventory then
             local ok, err = pcall(server.syncInventory, inv)
-            if not ok then lib.print.error(('Inventory %s committed but framework synchronization failed: %s'):format(inv.id, err)) end
+
+            if not ok then
+                lib.print.error(('Inventory %s committed but framework synchronization failed: %s'):format(inv.id, err))
+            end
         end
     end
+
     return true
 end
 
 function Inventory.PrepareItems(inv, item, count, metadata, slot, rotated)
     local commands, revision = {}, inv.revision or 0
+
     while count > 0 do
-        if #commands >= inv.slots then return nil, 'inventory_full' end
+        if #commands >= inv.slots then
+            return nil, 'inventory_full'
+        end
+
         local data, amount = Items.Metadata(inv, item, table.deepclone(metadata or {}), count)
-        if not Grid.Integer(amount) or amount > count then return nil, 'invalid_count' end
+
+        if not Grid.Integer(amount) or amount > count then
+            return nil, 'invalid_count'
+        end
+
         commands[#commands + 1] = {
             kind = 'add',
             inventory = inv,
@@ -948,7 +1351,11 @@ function Inventory.PrepareItems(inv, item, count, metadata, slot, rotated)
         }
         count -= amount
     end
-    if Inventory(inv.id) ~= inv or (inv.revision or 0) ~= revision then return nil, 'stale_inventory' end
+
+    if Inventory(inv.id) ~= inv or (inv.revision or 0) ~= revision then
+        return nil, 'stale_inventory'
+    end
+
     return commands
 end
 
@@ -1046,7 +1453,9 @@ end, true)
 --- This should only be utilised internally!
 --- To create a stash, please use `exports.ox_inventory:RegisterStash` instead.
 function Inventory.Create(id, label, invType, slots, weight, maxWeight, owner, items, groups, dbId)
-    if not Grid.Integer(slots, 0) then error('Inventory capacity requires a nonnegative integer') end
+    if not Grid.Integer(slots, 0) then
+        error('Inventory capacity requires a nonnegative integer')
+    end
 
 	local self = {
 		id = id,
@@ -1081,10 +1490,18 @@ function Inventory.Create(id, label, invType, slots, weight, maxWeight, owner, i
 		end
 	end
 
-    if items == nil then items = Inventory.Load(self.dbId, invType, owner) end
+    if items == nil then
+        items = Inventory.Load(self.dbId, invType, owner)
+    end
+
     local migrated
+
     self.items, self.weight, self.recovery, self.unknownWeight, migrated = Inventory.Reconcile(items, slots)
-    if migrated and not self.datastore then self.changed = true end
+
+    if migrated and not self.datastore then
+        self.changed = true
+    end
+
     self.grid = { columns = 5, cells = slots }
     self.revision = 0
 
@@ -1098,6 +1515,7 @@ function Inventory.Remove(inv)
 	inv = Inventory(inv) --[[@as OxInventory]]
 
 	if not inv then return end
+
     if inv.storageBusy then
         inv.removeAfterStorage = true
         return
@@ -1188,7 +1606,9 @@ function Inventory.Save(inv)
         end
     end
 
-    for _, entry in ipairs(inv.recovery or {}) do buffer[#buffer + 1] = { _gridRecovery = table.deepclone(entry) } end
+    for _, entry in ipairs(inv.recovery or {}) do
+        buffer[#buffer + 1] = { _gridRecovery = table.deepclone(entry) }
+    end
     local data = next(buffer) and json.encode(buffer) or nil
     inv.changed = false
 
@@ -1275,19 +1695,28 @@ local function generateItems(inv, invType, items)
 	end
 
     local returnData, totalWeight = {}, 0
+
     for i = 1, #items do
         local entry = items[i]
         local item = type(entry) == 'table' and Items(entry[1])
         local remaining = type(entry) == 'table' and entry[2]
+
         if not item or not Grid.Integer(remaining) then
             local record = type(entry) == 'table' and table.deepclone(entry) or { original = entry }
-            record.name, record.count, record.metadata, record.slot = type(entry) == 'table' and entry[1], remaining, type(entry) == 'table' and entry[3], #returnData + 1
+
+            record.name, record.count, record.metadata, record.slot =
+                type(entry) == 'table' and entry[1], remaining, type(entry) == 'table' and entry[3], #returnData + 1
             returnData[#returnData + 1] = record
         else
             while remaining > 0 do
                 local metadata, count = Items.Metadata(inv, item, table.deepclone(entry[3] or {}), remaining)
-                if not Grid.Integer(count) or count > remaining then error('Invalid generated item count') end
+
+                if not Grid.Integer(count) or count > remaining then
+                    error('Invalid generated item count')
+                end
+
                 local record = { name = item.name, count = count, metadata = metadata, slot = #returnData + 1 }
+
                 totalWeight += Inventory.SlotWeight(item, record)
                 returnData[#returnData + 1] = record
                 remaining -= count
@@ -1326,9 +1755,14 @@ function Inventory.Load(id, invType, owner)
 
     if type(result) == 'string' then
         local ok, decoded = pcall(json.decode, result)
-        if not ok or type(decoded) ~= 'table' then error('Refusing to load malformed inventory JSON', 2) end
+
+        if not ok or type(decoded) ~= 'table' then
+            error('Refusing to load malformed inventory JSON', 2)
+        end
+
         result = decoded
     end
+
     return result or {}, 0
 end
 
@@ -1378,13 +1812,27 @@ exports('GetItem', Inventory.GetItem)
 ---@param slot2 number
 function Inventory.SwapSlots(fromInventory, toInventory, slot1, slot2)
     fromInventory, toInventory = Inventory(fromInventory), Inventory(toInventory)
+
     if not fromInventory or not toInventory or not Grid.Integer(slot1) or not Grid.Integer(slot2) then return false end
+
     local from = fromInventory.items[slot1]
+
     if not from then return false end
+
     local plan = Inventory.Assess({
-        { kind = 'transfer', from = fromInventory, to = toInventory, fromSlot = slot1, toSlot = slot2, count = from.count, swap = true },
+        {
+            kind = 'transfer',
+            from = fromInventory,
+            to = toInventory,
+            fromSlot = slot1,
+            toSlot = slot2,
+            count = from.count,
+            swap = true
+        },
     })
+
     if not plan or not Inventory.Apply(plan) then return false end
+
     return toInventory.items[slot2], fromInventory.items[slot1]
 end
 
@@ -1392,7 +1840,9 @@ exports('SwapSlots', Inventory.SwapSlots)
 
 function Inventory.ContainerWeight(container, metaWeight, playerInventory)
     local metadata = table.deepclone(container.metadata)
+
     metadata.weight = metaWeight
+
     return Inventory.SetMetadata(playerInventory, container.slot, metadata)
 end
 
@@ -1405,7 +1855,9 @@ function Inventory.SetItem(inv, item, count, metadata)
 	item = itemDefinition(item)
 
 	if not item then return false, 'invalid_item' end
-	if not Grid.Integer(count, 0) then return false, 'invalid_count' end
+	if not Grid.Integer(count, 0) then
+	    return false, 'invalid_count'
+	end
 
 	count = math.floor(count + 0.5)
 	if count < 0 then return false, 'negative_count' end
@@ -1484,13 +1936,33 @@ local Utils = require 'modules.utils.server'
 ---@param metadata { [string]: any }
 function Inventory.SetMetadata(inv, slotId, metadata)
     inv = Inventory(inv)
+
     if not inv or not Grid.Integer(slotId) or not inv.items[slotId] then return false end
+
     local record = table.deepclone(inv.items[slotId])
+
     record.metadata = type(metadata) == 'table' and table.deepclone(metadata) or { type = metadata }
-    if record.metadata.imageurl and record.metadata.imageurl ~= inv.items[slotId].metadata.imageurl and Utils.IsValidImageUrl and not Utils.IsValidImageUrl(record.metadata.imageurl) then record.metadata.imageurl = nil end
+
+    if record.metadata.imageurl and record.metadata.imageurl ~= inv.items[slotId].metadata.imageurl then
+        if Utils.IsValidImageUrl and not Utils.IsValidImageUrl(record.metadata.imageurl) then
+            record.metadata.imageurl = nil
+        end
+    end
+
     local item = Items(record.name)
-    local plan, err = Inventory.Assess({ { kind = 'set', inventory = inv, slot = slotId, record = not (item.decay and record.metadata.durability == 0) and record or nil } })
-    if not plan then return false, err end
+    local plan, err = Inventory.Assess({
+        {
+            kind = 'set',
+            inventory = inv,
+            slot = slotId,
+            record = not (item.decay and record.metadata.durability == 0) and record or nil
+        }
+    })
+
+    if not plan then
+        return false, err
+    end
+
     return Inventory.Apply(plan)
 end
 
@@ -1500,9 +1972,13 @@ exports('SetMetadata', Inventory.SetMetadata)
 ---@param slots number
 function Inventory.SetSlotCount(inv, slots)
     inv = Inventory(inv)
+
     if not inv or not Grid.Integer(slots, 0) then return false end
+
     local plan = Inventory.Assess({ { kind = 'resize', inventory = inv, slots = slots } })
+
     if not plan then return false end
+
     return Inventory.Apply(plan)
 end
 
@@ -1514,6 +1990,7 @@ function Inventory.SetMaxWeight(inv, maxWeight)
 	inv = Inventory(inv) --[[@as OxInventory]]
 
 	if not inv or inv.storageBusy then return end
+
 	if not Grid.Integer(maxWeight, 0) then return end
 
 	inv.maxWeight = maxWeight
@@ -1542,30 +2019,59 @@ exports('SetMaxWeight', Inventory.SetMaxWeight)
 function Inventory.AddItem(inv, item, count, metadata, slot, cb, rotated)
     item = itemDefinition(item)
     inv = Inventory(inv)
-    if not item then return false, 'invalid_item' end
-    if not inv then return false, 'invalid_inventory' end
-    if not Grid.Integer(count) then return false, 'invalid_count' end
-    if slot ~= nil and not Grid.Integer(slot) then return false, 'invalid_slot' end
-    if rotated ~= nil and type(rotated) ~= 'boolean' then return false, 'invalid_rotation' end
+
+    if not item then
+        return false, 'invalid_item'
+    end
+
+    if not inv then
+        return false, 'invalid_inventory'
+    end
+
+    if not Grid.Integer(count) then
+        return false, 'invalid_count'
+    end
+
+    if slot ~= nil and not Grid.Integer(slot) then
+        return false, 'invalid_slot'
+    end
+
+    if rotated ~= nil and type(rotated) ~= 'boolean' then
+        return false, 'invalid_rotation'
+    end
+
     local commands, err = Inventory.PrepareItems(inv, item, count, assertMetadata(metadata), slot, rotated)
     local plan
-    if commands then plan, err = Inventory.Assess(commands) end
+
+    if commands then
+        plan, err = Inventory.Assess(commands)
+    end
+
     if not plan then
-        if cb then return cb(false, err) end
+        if cb then
+            return cb(false, err)
+        end
 
         return false, err
     end
 
     local success, response = Inventory.Apply(plan)
+
     if success then
         local records = {}
+
         for i, result in ipairs(plan.results) do
             records[i] = result.inventory.items[result.slot]
             TriggerClientEvent('ox_inventory:itemNotify', inv.id, { records[i], 'ui_added', commands[i].record.count })
         end
+
         response = #records == 1 and records[1] or records
     end
-    if cb then return cb(success, response) end
+
+    if cb then
+        return cb(success, response)
+    end
+
     return success, response
 end
 
@@ -1667,22 +2173,62 @@ exports('GetItemSlots', Inventory.GetItemSlots)
 function Inventory.RemoveItem(inv, item, count, metadata, slot, ignoreTotal, strict)
     item = itemDefinition(item)
     inv = Inventory(inv)
-    if not item then return false, 'invalid_item' end
-    if not inv then return false, 'invalid_inventory' end
-    if not Grid.Integer(count) then return false, 'invalid_count' end
-    if slot ~= nil and not Grid.Integer(slot) then return false, 'invalid_slot' end
+
+    if not item then
+        return false, 'invalid_item'
+    end
+
+    if not inv then
+        return false, 'invalid_inventory'
+    end
+
+    if not Grid.Integer(count) then
+        return false, 'invalid_count'
+    end
+
+    if slot ~= nil and not Grid.Integer(slot) then
+        return false, 'invalid_slot'
+    end
+
     metadata = assertMetadata(metadata)
-    if slot and not inv.items[slot] then return false, 'no_item_in_slot' end
+
+    if slot and not inv.items[slot] then
+        return false, 'no_item_in_slot'
+    end
+
     if ignoreTotal then
         local slots, total = Inventory.GetItemSlots(inv, item, metadata, strict)
+
         count = math.min(count, slot and (slots[slot] or 0) or total)
     end
-    if count == 0 then return false, 'not_enough_items' end
-    local plan, err = Inventory.Assess({ { kind = 'remove', inventory = inv, name = item.name, count = count, metadata = metadata, slot = slot, strict = strict } })
-    if not plan then return false, err end
+
+    if count == 0 then
+        return false, 'not_enough_items'
+    end
+
+    local plan, err = Inventory.Assess({
+        {
+            kind = 'remove',
+            inventory = inv,
+            name = item.name,
+            count = count,
+            metadata = metadata,
+            slot = slot,
+            strict = strict
+        }
+    })
+
+    if not plan then
+        return false, err
+    end
+
     local record = slot and inv.items[slot] or { name = item.name, label = item.label }
     local success, response = Inventory.Apply(plan)
-    if success then TriggerClientEvent('ox_inventory:itemNotify', inv.id, { record, 'ui_removed', count }) end
+
+    if success then
+        TriggerClientEvent('ox_inventory:itemNotify', inv.id, { record, 'ui_removed', count })
+    end
+
     return success, response
 end
 
@@ -1696,11 +2242,19 @@ function Inventory.CanCarryItem(inv, item, count, metadata)
     item = itemDefinition(item)
     inv = Inventory(inv)
     count = count or 1
+
     if not inv or not item or not Grid.Integer(count) or (not item.stack and count > inv.slots) then return false end
+
     local commands = {}
+
     for i = 1, item.stack and 1 or count do
-        commands[i] = { kind = 'add', inventory = inv, record = { name = item.name, count = item.stack and count or 1, metadata = assertMetadata(metadata) or {} } }
+        commands[i] = {
+            kind = 'add',
+            inventory = inv,
+            record = { name = item.name, count = item.stack and count or 1, metadata = assertMetadata(metadata) or {} }
+        }
     end
+
     return Inventory.Assess(commands) ~= nil
 end
 
@@ -1711,12 +2265,25 @@ exports('CanCarryItem', Inventory.CanCarryItem)
 function Inventory.CanCarryAmount(inv, item)
     item = itemDefinition(item)
     inv = Inventory(inv)
-    if not inv or not item or inv.unknownWeight then return 0 end
-    local limit = item.weight > 0 and math.max(0, math.floor((inv.maxWeight - inv.weight) / item.weight)) or (item.stack and 2147483647 or inv.slots)
-    if item.stack then return Inventory.CanCarryItem(inv, item, math.max(1, limit)) and limit or 0 end
+
+    if not inv or not item or inv.unknownWeight then
+        return 0
+    end
+
+    local limit = item.weight > 0 and math.max(
+        0,
+        math.floor((inv.maxWeight - inv.weight) / item.weight)
+    ) or (item.stack and 2147483647 or inv.slots)
+
+    if item.stack then
+        return Inventory.CanCarryItem(inv, item, math.max(1, limit)) and limit or 0
+    end
+
     local low, high = 0, math.min(inv.slots, limit)
+
     while low < high do
         local middle = math.ceil((low + high) / 2)
+
         if Inventory.CanCarryItem(inv, item, middle) then
             low = middle
         else
@@ -1737,8 +2304,10 @@ function Inventory.CanCarryWeight(inv, weight)
 
 	local availableWeight = inv.maxWeight - inv.weight
 	local canHold = not inv.unknownWeight and availableWeight >= weight
+
 	return canHold, availableWeight
 end
+
 exports('CanCarryWeight', Inventory.CanCarryWeight)
 
 ---@param inv inventory
@@ -1748,12 +2317,23 @@ exports('CanCarryWeight', Inventory.CanCarryWeight)
 ---@param testItemCount number
 function Inventory.CanSwapItem(inv, firstItem, firstItemCount, testItem, testItemCount)
     inv = Inventory(inv)
+
     local item = Items(testItem)
-    if not inv or not item or not Grid.Integer(firstItemCount, 0) or not Grid.Integer(testItemCount) then return false end
-    local commands = { { kind = 'remove', inventory = inv, name = firstItem, count = firstItemCount } }
-    for i = 1, item.stack and 1 or testItemCount do
-        commands[#commands + 1] = { kind = 'add', inventory = inv, record = { name = item.name, count = item.stack and testItemCount or 1, metadata = {} } }
+
+    if not inv or not item or not Grid.Integer(firstItemCount, 0) or not Grid.Integer(testItemCount) then
+        return false
     end
+
+    local commands = { { kind = 'remove', inventory = inv, name = firstItem, count = firstItemCount } }
+
+    for i = 1, item.stack and 1 or testItemCount do
+        commands[#commands + 1] = {
+            kind = 'add',
+            inventory = inv,
+            record = { name = item.name, count = item.stack and testItemCount or 1, metadata = {} }
+        }
+    end
+
     return Inventory.Assess(commands) ~= nil
 end
 
@@ -1785,7 +2365,16 @@ end
 local function CustomDrop(prefix, items, coords, slots, maxWeight, instance, model)
 	local dropId = generateInvId()
     local records = generateItems({ id = dropId }, 'drop', items)
-	local inventory = Inventory.Create(dropId, ('%s %s'):format(prefix, dropId:gsub('%D', '')), 'drop', slots or shared.dropslots, 0, maxWeight or shared.dropweight, false, records)
+	local inventory = Inventory.Create(
+	    dropId,
+	    ('%s %s'):format(prefix, dropId:gsub('%D', '')),
+	    'drop',
+	    slots or shared.dropslots,
+	    0,
+	    maxWeight or shared.dropweight,
+	    false,
+	    records
+	)
 
 	if not inventory then return end
 
@@ -1807,10 +2396,23 @@ exports('CustomDrop', CustomDrop)
 exports('CreateDropFromPlayer', function(playerId)
 	local playerInventory = Inventory(playerId)
 
-	if not playerInventory or playerInventory.storageBusy or not next(playerInventory.items) and not next(playerInventory.recovery) then return end
+	if not playerInventory or playerInventory.storageBusy then return end
+
+	if not next(playerInventory.items) and not next(playerInventory.recovery) then
+	    return
+	end
 
 	local dropId = generateInvId()
-	local inventory = Inventory.Create(dropId, ('Drop %s'):format(dropId:gsub('%D', '')), 'drop', playerInventory.slots, playerInventory.weight, playerInventory.maxWeight, false, minimal(playerInventory))
+	local inventory = Inventory.Create(
+	    dropId,
+	    ('Drop %s'):format(dropId:gsub('%D', '')),
+	    'drop',
+	    playerInventory.slots,
+	    playerInventory.weight,
+	    playerInventory.maxWeight,
+	    false,
+	    minimal(playerInventory)
+	)
 
 	if not inventory then return end
 
@@ -1848,8 +2450,19 @@ local TriggerEventHooks = require 'modules.hooks.server'
 local function dropItem(source, playerInventory, fromData, data)
     if not fromData or not data.coords then return false end
     local dropId = generateInvId('drop')
-    local inventory = Inventory.Create(dropId, ('Drop %s'):format(dropId:gsub('%D', '')), 'drop', shared.dropslots, 0, shared.dropweight, false, {})
+    local inventory = Inventory.Create(
+        dropId,
+        ('Drop %s'):format(dropId:gsub('%D', '')),
+        'drop',
+        shared.dropslots,
+        0,
+        shared.dropweight,
+        false,
+        {}
+    )
+
     if not inventory then return false end
+
     local plan, err = Inventory.Assess({ {
         kind = 'transfer',
         from = playerInventory,
@@ -1862,21 +2475,41 @@ local function dropItem(source, playerInventory, fromData, data)
 
     if not plan then
         Inventory.Remove(inventory)
+
         return false, err
     end
 
     local hooks <close> = TriggerEventHooks('swapItems', {
-        source = source, fromInventory = playerInventory.id, fromSlot = fromData, fromType = playerInventory.type,
-        toInventory = 'newdrop', toSlot = data.toSlot, toType = 'drop', count = data.count, action = 'move', dropId = dropId,
+        source = source,
+        fromInventory = playerInventory.id,
+        fromSlot = fromData,
+        fromType = playerInventory.type,
+        toInventory = 'newdrop',
+        toSlot = data.toSlot,
+        toType = 'drop',
+        count = data.count,
+        action = 'move',
+        dropId = dropId,
     })
+
     if not hooks.success or not Inventory.Apply(plan) then
         hooks.success = false
         Inventory.Remove(inventory)
+
         return false
     end
+
     inventory.coords = data.coords
     Inventory.Drops[dropId] = { coords = data.coords, instance = data.instance }
-    TriggerClientEvent('ox_inventory:createDrop', -1, dropId, Inventory.Drops[dropId], playerInventory.open and source, data.fromSlot)
+    TriggerClientEvent(
+        'ox_inventory:createDrop',
+        -1,
+        dropId,
+        Inventory.Drops[dropId],
+        playerInventory.open and source,
+        data.fromSlot
+    )
+
     return true, {
         weight = playerInventory.weight,
         items = { {
@@ -1887,45 +2520,76 @@ local function dropItem(source, playerInventory, fromData, data)
 end
 
 lib.callback.register('ox_inventory:swapItems', function(source, data)
-    if type(data) ~= 'table' or type(data.fromType) ~= 'string' or type(data.toType) ~= 'string'
-        or not Grid.Integer(data.fromSlot) or not Grid.Integer(data.toSlot) or not Grid.Integer(data.count)
-        or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then return false end
+    if type(data) ~= 'table' or type(data.fromType) ~= 'string' or type(data.toType) ~= 'string' then return false end
+
+    if not Grid.Integer(data.fromSlot) or not Grid.Integer(data.toSlot) or not Grid.Integer(data.count) then
+        return false
+    end
+
+    if data.rotated ~= nil and type(data.rotated) ~= 'boolean' then return false end
+
     if data.fromType ~= data.toType and data.toType ~= 'player' and data.fromType ~= 'player' then
         Utils.LogExploit(source, 'swapItems', 'Triggered event with invalid data', true)
         return false
     end
+
     if data.toType == 'inspect' or data.fromType == 'inspect' then return false end
+
     local player = Inventory(source)
+
     if not player or not player.open then return false end
+
     local from = data.fromType == 'player' and player or Inventory(player.open)
     local to = data.toType == 'player' and player or Inventory(player.open)
+
     if not from or not to then
         player:closeInventory()
+
         return false
     end
 
     if data.fromType ~= 'player' and from == player then return false end
+
     if data.toType ~= 'player' and data.toType ~= 'newdrop' and to == player then return false end
+
     local fromData, toData = from.items[data.fromSlot], to.items[data.toSlot]
+
     if not fromData or data.count > fromData.count then return false end
+
     if data.toType == 'newdrop' then
         if from ~= player or (type(data.coords) ~= 'vector3' and type(data.coords) ~= 'table') then return false end
+
         if #(GetEntityCoords(GetPlayerPed(source)) - data.coords) > 10 then return false end
+
         return dropItem(source, from, fromData, data)
     end
+
     if from ~= to and (from.type == 'policeevidence' or (to.type == 'policeevidence' and toData)) then
         local group, rank = server.hasGroup(player, shared.police)
-        if not group or server.evidencegrade > rank then return false, 'evidence_cannot_take' end
+
+        if not group or server.evidencegrade > rank then
+            return false, 'evidence_cannot_take'
+        end
     end
+
     if fromData.metadata.container and to.type == 'container' then return false end
+
     if toData and toData.metadata.container and from.type == 'container' then return false end
+
     local container = from ~= to and player.containerSlot and (from.type == 'container' and from or to.type == 'container' and to)
     local containerItem = container and player.items[player.containerSlot]
+
     if containerItem then
         local policy = Items.containers[containerItem.name]
         local entering = to == container and fromData or toData
-        if entering and policy and ((policy.whitelist and not policy.whitelist[entering.name]) or (policy.blacklist and policy.blacklist[entering.name])) then return false end
+
+        if entering and policy then
+            if policy.whitelist and not policy.whitelist[entering.name] then return false end
+
+            if policy.blacklist and policy.blacklist[entering.name] then return false end
+        end
     end
+
     local commands = { {
         kind = 'transfer',
         from = from,
@@ -1935,107 +2599,221 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
         count = data.count,
         rotated = data.rotated
     } }
+
     local plan, err = Inventory.Assess(commands)
-    if not plan then return false, err == 'cannot_carry' and not toData and 'cannot_carry_other' or err end
-    local action = toData and (toData.name ~= fromData.name or not toData.stack or not table.matches(toData.metadata, fromData.metadata)) and 'swap' or toData and 'stack' or 'move'
+
+    if not plan then
+        return false, err == 'cannot_carry' and not toData and 'cannot_carry_other' or err
+    end
+
+    local action = 'move'
+
+    if toData then
+        action = 'stack'
+
+        if toData.name ~= fromData.name or not toData.stack or not table.matches(toData.metadata, fromData.metadata) then
+            action = 'swap'
+        end
+    end
+
     local hooks <close> = TriggerEventHooks('swapItems', {
-        source = source, fromInventory = from.id, fromSlot = fromData, fromType = from.type,
-        toInventory = to.id, toSlot = toData or data.toSlot, toType = to.type, count = data.count, action = action,
+        source = source,
+        fromInventory = from.id,
+        fromSlot = fromData,
+        fromType = from.type,
+        toInventory = to.id,
+        toSlot = toData or data.toSlot,
+        toType = to.type,
+        count = data.count,
+        action = action,
     })
     if not hooks.success then return false end
+
     local success, response = Inventory.Apply(plan)
+
     if not success then
         hooks.success = false
+
         return false, response
     end
 
     if from ~= to then
-        if from.player and from ~= player then TriggerClientEvent('ox_inventory:itemNotify', from.id, { fromData, 'ui_removed', data.count }) end
-        if to.player and to ~= player then TriggerClientEvent('ox_inventory:itemNotify', to.id, { fromData, 'ui_added', data.count }) end
+        if from.player and from ~= player then
+            TriggerClientEvent('ox_inventory:itemNotify', from.id, { fromData, 'ui_removed', data.count })
+        end
+
+        if to.player and to ~= player then
+            TriggerClientEvent('ox_inventory:itemNotify', to.id, { fromData, 'ui_added', data.count })
+        end
     end
-    if server.loglevel > 0 then lib.logger(player.owner, 'swapSlots', ('%sx %s transferred from "%s" to "%s"'):format(data.count, fromData.name, from.label, to.label)) end
+
+    if server.loglevel > 0 then
+        lib.logger(
+            player.owner,
+            'swapSlots',
+            ('%sx %s transferred from "%s" to "%s"'):format(data.count, fromData.name, from.label, to.label)
+        )
+    end
+
     return containerItem and player.items[player.containerSlot].weight or true
 end)
 
 lib.callback.register('ox_inventory:recoverItem', function(source, data)
-    if type(data) ~= 'table' or type(data.fromType) ~= 'string' or type(data.recoveryId) ~= 'string'
-        or (data.toSlot ~= nil and not Grid.Integer(data.toSlot)) or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then return false end
+    if type(data) ~= 'table' or type(data.fromType) ~= 'string' or type(data.recoveryId) ~= 'string' then return false end
+
+    if data.toSlot ~= nil and not Grid.Integer(data.toSlot) then return false end
+
+    if data.rotated ~= nil and type(data.rotated) ~= 'boolean' then return false end
+
     local player = Inventory(source)
+
     if not player or not player.open or data.fromType == 'inspect' then return false end
+
     local inv = data.fromType == 'player' and player or Inventory(player.open)
-    if not inv or (data.fromType ~= 'player' and (inv == player or (inv.player and 'otherplayer' or inv.type) ~= data.fromType)) then return false end
+
+    if not inv then return false end
+
+    if data.fromType ~= 'player' then
+        if inv == player then return false end
+
+        if (inv.player and 'otherplayer' or inv.type) ~= data.fromType then return false end
+    end
+
     if inv.groups and not server.hasGroup(player, inv.groups) then return false end
-    if inv.coords and type(inv.coords) == 'vector3' and #(GetEntityCoords(GetPlayerPed(source)) - inv.coords) > (inv.distance or 10) then return false end
+
+    if inv.coords and type(inv.coords) == 'vector3' then
+        if #(GetEntityCoords(GetPlayerPed(source)) - inv.coords) > (inv.distance or 10) then return false end
+    end
+
     if inv.type == 'policeevidence' then
         local group, rank = server.hasGroup(player, shared.police)
+
         if not group or rank < server.evidencegrade then return false end
     end
-    local plan, err = Inventory.Assess({ { kind = 'recover', inventory = inv, id = data.recoveryId, slot = data.toSlot, rotated = data.rotated } })
-    if not plan then return false, err end
+
+    local plan, err = Inventory.Assess({
+        { kind = 'recover', inventory = inv, id = data.recoveryId, slot = data.toSlot, rotated = data.rotated }
+    })
+
+    if not plan then
+        return false, err
+    end
+
     return Inventory.Apply(plan)
 end)
 
 local function releaseStorage(inv)
     inv.storageBusy = nil
+
     if inv.removeAfterStorage then
         inv.removeAfterStorage = nil
         Inventory.Remove(inv)
     end
 end
 
-local storageGuard = { __close = function(guard) releaseStorage(guard.inventory) end }
+local storageGuard = {
+    __close = function(guard)
+        releaseStorage(guard.inventory)
+    end
+}
 
 function Inventory.PersistPlayer(inv)
     if inv.storageBusy then return false end
+
     inv.storageBusy = true
+
     local guard <close> = setmetatable({ inventory = inv }, storageGuard)
     local ok, saved = pcall(db.savePlayer, inv.owner, json.encode(minimal(inv)))
+
     return ok and saved ~= false and saved ~= nil
 end
 
 function Inventory.Confiscate(source)
     local inv = Inventory(source)
+
     if not inv or not inv.player or inv.storageBusy then return false end
+
     local plan = Inventory.Assess({ { kind = 'replace', inventory = inv, records = {} } })
+
     plan.storage = true
     inv.storageBusy = true
+
     local guard <close> = setmetatable({ inventory = inv }, storageGuard)
     local records = minimal(inv)
-    local stored = MySQL.scalar.await('SELECT data FROM ox_inventory WHERE name = ? AND owner = ?', { inv.owner, tostring(inv.owner) })
+    local stored = MySQL.scalar.await('SELECT data FROM ox_inventory WHERE name = ? AND owner = ?', {
+        inv.owner,
+        tostring(inv.owner)
+    })
+
     if stored then
         local ok, decoded = pcall(json.decode, stored)
+
         if not ok or type(decoded) ~= 'table' then return false end
-        for _, record in pairs(decoded) do records[#records + 1] = record end
+
+        for _, record in pairs(decoded) do
+            records[#records + 1] = record
+        end
     end
+
     local ok, saved = pcall(db.confiscatePlayer, inv.owner, json.encode(records))
+
     if not ok or saved == false or saved == nil then return false end
+
     local success = Inventory.Apply(plan)
+
     if not success then return false end
+
     TriggerClientEvent('ox_inventory:inventoryConfiscated', inv.id)
+
     return true
 end
 exports('ConfiscateInventory', Inventory.Confiscate)
 
 function Inventory.Return(source)
     local inv = Inventory(source)
+
     if not inv or not inv.player or inv.storageBusy then return false end
+
     local revision = inv.revision
-    local records = MySQL.scalar.await('SELECT data FROM ox_inventory WHERE name = ? AND owner = ?', { inv.owner, tostring(inv.owner) })
+    local records = MySQL.scalar.await('SELECT data FROM ox_inventory WHERE name = ? AND owner = ?', {
+        inv.owner,
+        tostring(inv.owner)
+    })
+
     if not records or Inventory(source) ~= inv or inv.revision ~= revision then return false end
+
     local items, _, recovery = Inventory.Reconcile(records, inv.slots)
     local restored = serialize(items, recovery)
-    for _, record in ipairs(minimal(inv)) do restored[#restored + 1] = record end
+
+    for _, record in ipairs(minimal(inv)) do
+        restored[#restored + 1] = record
+    end
+
     local plan = Inventory.Assess({ { kind = 'replace', inventory = inv, records = restored } })
+
     if not plan then return false end
+
     local state = plan.states[inv]
+
     plan.storage = true
     inv.storageBusy = true
+
     local guard <close> = setmetatable({ inventory = inv }, storageGuard)
     local ok, saved = pcall(db.restorePlayer, inv.owner, json.encode(serialize(state.items, state.recovery)))
+
     if not ok or not saved then return false end
+
     local success = Inventory.Apply(plan)
+
     if not success then return false end
-    TriggerClientEvent('ox_inventory:inventoryReturned', source, { inv.items, inv.weight, grid = inv.grid, recovery = inv.recovery })
+
+    TriggerClientEvent('ox_inventory:inventoryReturned', source, {
+        inv.items,
+        inv.weight,
+        grid = inv.grid,
+        recovery = inv.recovery
+    })
+
     return true
 end
 
@@ -2045,25 +2823,38 @@ exports('ReturnInventory', Inventory.Return)
 ---@param keep? string | string[] an item or list of items to ignore while clearing items
 function Inventory.Clear(inv, keep)
     inv = Inventory(inv)
+
     if not inv then return end
+
     local records, names = {}, {}
+
     if type(keep) == 'string' then
         names[keep] = true
     elseif type(keep) == 'table' then
-        for _, name in ipairs(keep) do names[name] = true end
+        for _, name in ipairs(keep) do
+            names[name] = true
+        end
     end
 
     for _, record in pairs(inv.items) do
-        if names[record.name] then records[#records + 1] = record end
+        if names[record.name] then
+            records[#records + 1] = record
+        end
     end
 
     if keep then
         for _, entry in ipairs(inv.recovery) do
-            if type(entry.record) ~= 'table' or names[entry.record.name] then records[#records + 1] = { _gridRecovery = entry } end
+            if type(entry.record) ~= 'table' or names[entry.record.name] then
+                records[#records + 1] = { _gridRecovery = entry }
+            end
         end
     end
+
     local plan = Inventory.Assess({ { kind = 'replace', inventory = inv, records = records } })
-    if plan and Inventory.Apply(plan) then return true end
+
+    if plan and Inventory.Apply(plan) then
+        return true
+    end
 end
 
 exports('ClearInventory', Inventory.Clear)
@@ -2072,8 +2863,11 @@ exports('ClearInventory', Inventory.Clear)
 ---@return integer?
 function Inventory.GetEmptySlot(inv)
     inv = Inventory(inv)
+
     if not inv then return end
+
     local occupied = Grid.Occupancy(inv.grid, inv.items, Items)
+
     return occupied and Grid.FirstFit(inv.grid, occupied, nil)
 end
 
@@ -2084,16 +2878,25 @@ exports('GetEmptySlot', Inventory.GetEmptySlot)
 ---@param metadata any
 function Inventory.GetSlotForItem(inv, itemName, metadata)
     inv = Inventory(inv)
+
     local item = Items(itemName)
+
     if not inv or not item then return end
+
     metadata = assertMetadata(metadata) or {}
+
     if item.stack then
         for i = 1, inv.slots do
             local record = inv.items[i]
-            if record and record.name == item.name and table.matches(record.metadata, metadata) then return i end
+
+            if record and record.name == item.name and table.matches(record.metadata, metadata) then
+                return i
+            end
         end
     end
+
     local occupied = Grid.Occupancy(inv.grid, inv.items, Items)
+
     return occupied and Grid.FirstFit(inv.grid, occupied, item.size)
 end
 
@@ -2239,7 +3042,9 @@ local function prepareInventorySave(inv, buffer, time)
 
     if not shouldSave then return end
 
-    for _, entry in ipairs(inv.recovery or {}) do buffer[#buffer + 1] = { _gridRecovery = table.deepclone(entry) } end
+    for _, entry in ipairs(inv.recovery or {}) do
+        buffer[#buffer + 1] = { _gridRecovery = table.deepclone(entry) }
+    end
     local data = next(buffer) and json.encode(buffer) or nil
     inv.changed = false
     table.wipe(buffer)
@@ -2362,35 +3167,72 @@ RegisterServerEvent('ox_inventory:closeInventory', function()
 end)
 
 local function giveItem(playerId, slot, target, count)
-    if count == nil or count == 0 then count = 1 end
+    if count == nil or count == 0 then
+        count = 1
+    end
+
     if not Grid.Integer(slot) or not Grid.Integer(target) or not Grid.Integer(count) then return end
+
     local from, to = Inventory(playerId), Inventory(target)
+
     if not from or not to or from == to or not to.player then return end
+
     local record = from.items[slot]
+
     if not record then return end
+
     local failure = { 'cannot_give', count, record.label }
-    if Player(target).state.invBusy or count > record.count or #(GetEntityCoords(from.player.ped) - GetEntityCoords(to.player.ped)) > 15 then return failure end
+
+    if Player(target).state.invBusy or count > record.count then
+        return failure
+    end
+
+    if #(GetEntityCoords(from.player.ped) - GetEntityCoords(to.player.ped)) > 15 then
+        return failure
+    end
+
     local occupied = Grid.Occupancy(to.grid, to.items, Items)
     local anchor
+
     if record.stack then
         for i = 1, to.slots do
             local item = to.items[i]
+
             if item and item.name == record.name and table.matches(item.metadata, record.metadata) then
                 anchor = i
                 break
             end
         end
     end
+
     anchor = anchor or (occupied and Grid.FirstFit(to.grid, occupied, Items(record.name).size, record.rotated))
-    if not anchor then return failure end
-    local plan = Inventory.Assess({ { kind = 'transfer', from = from, to = to, fromSlot = slot, toSlot = anchor, count = count } })
-    if not plan then return failure end
-    local hooks <close> = TriggerEventHooks('swapItems', {
-        source = from.id, fromInventory = from.id, fromType = from.type, toInventory = to.id, toType = to.type,
-        count = count, action = 'give', fromSlot = record,
+
+    if not anchor then
+        return failure
+    end
+
+    local plan = Inventory.Assess({
+        { kind = 'transfer', from = from, to = to, fromSlot = slot, toSlot = anchor, count = count }
     })
+
+    if not plan then
+        return failure
+    end
+
+    local hooks <close> = TriggerEventHooks('swapItems', {
+        source = from.id,
+        fromInventory = from.id,
+        fromType = from.type,
+        toInventory = to.id,
+        toType = to.type,
+        count = count,
+        action = 'give',
+        fromSlot = record,
+    })
+
     if not hooks.success or not Inventory.Apply(plan) then
         hooks.success = false
+
         return failure
     end
 
@@ -2403,38 +3245,71 @@ RegisterServerEvent('ox_inventory:giveItem', function(...) giveItem(source, ...)
 
 local function updateWeapon(source, action, value, slot, specialAmmo)
     local inv = Inventory(source)
+
     if not inv then return false end
+
     if not action then
         inv.weapon = nil
+
         return true
     end
 
-    if slot == false then slot = nil end
+    if slot == false then
+        slot = nil
+    end
+
     if type(action) ~= 'string' or (slot ~= nil and not Grid.Integer(slot)) then return false end
+
     if type(value) == 'number' and (value ~= value or value == math.huge or value < 0) then return false end
-    if action == 'component' and type(value) == 'table' then slot = value.slot end
+
+    if action == 'component' and type(value) == 'table' then
+        slot = value.slot
+    end
+
     slot = slot or inv.weapon
+
     if not Grid.Integer(slot) then return false end
+
     local original = inv.items[slot]
+
     if not original then return false end
+
     local weapon, item = table.deepclone(original), Items(original.name)
+
     if not item.weapon then
         inv.weapon = nil
+
         return false
     end
 
     local commands = {}
+
     if action == 'load' then
-        if not Grid.Integer(value, 0) or (weapon.metadata.durability or 0) <= 0 or not item.ammoname then return false end
+        if not Grid.Integer(value, 0) or (weapon.metadata.durability or 0) <= 0 or not item.ammoname then
+            return false
+        end
+
         local count = value - (weapon.metadata.ammo or 0)
+
         if not Grid.Integer(count) then return false end
-        commands[1] = { kind = 'remove', inventory = inv, name = item.ammoname, count = count, metadata = specialAmmo and { type = specialAmmo } or nil }
+
+        commands[1] = {
+            kind = 'remove',
+            inventory = inv,
+            name = item.ammoname,
+            count = count,
+            metadata = specialAmmo and { type = specialAmmo } or nil
+        }
         weapon.metadata.ammo, weapon.metadata.specialAmmo = value, specialAmmo
     elseif action == 'throw' then
-        local plan = Inventory.Assess({ { kind = 'remove', inventory = inv, name = weapon.name, count = 1, slot = slot } })
+        local plan = Inventory.Assess({
+            { kind = 'remove', inventory = inv, name = weapon.name, count = 1, slot = slot }
+        })
+
         return plan and Inventory.Apply(plan) or false
     elseif action == 'component' then
         local index = type(value) == 'number' and value
+
         if type(value) == 'table' then
             for i, name in ipairs(weapon.metadata.components or {}) do
                 if name == value.component then
@@ -2443,38 +3318,64 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
                 end
             end
         end
+
         if index then
             local name = weapon.metadata.components and weapon.metadata.components[index]
             local component = name and Items(name)
+
             if not component then return false end
+
             local credits = Inventory.PrepareItems(inv, component, 1, {})
+
             if not credits then return false end
+
             table.remove(weapon.metadata.components, index)
             commands = credits
         elseif type(value) == 'string' then
             local anchor = tonumber(value)
+
             if not Grid.Integer(anchor) then return false end
+
             local component = inv.items[anchor]
+
             if not component or not Items(component.name).component then return false end
+
             commands[1] = { kind = 'remove', inventory = inv, name = component.name, count = 1, slot = anchor }
             weapon.metadata.components = weapon.metadata.components or {}
             table.insert(weapon.metadata.components, component.name)
-        else return false end
+        else
+            return false
+        end
     elseif action == 'ammo' then
         if type(value) ~= 'number' then return false end
-        if item.hash == `WEAPON_FIREEXTINGUISHER` or item.hash == `WEAPON_PETROLCAN` or item.hash == `WEAPON_HAZARDCAN` or item.hash == `WEAPON_FERTILIZERCAN` then
-            weapon.metadata.durability, weapon.metadata.ammo = math.min(100, math.floor(value)), math.min(100, math.floor(value))
+        local fuelCan = item.hash == `WEAPON_PETROLCAN` or item.hash == `WEAPON_HAZARDCAN`
+        local sprayCan = item.hash == `WEAPON_FIREEXTINGUISHER` or item.hash == `WEAPON_FERTILIZERCAN`
+
+        if fuelCan or sprayCan then
+            weapon.metadata.durability, weapon.metadata.ammo =
+                math.min(100, math.floor(value)), math.min(100, math.floor(value))
         elseif Grid.Integer(value, 0) and value < (weapon.metadata.ammo or 0) then
             weapon.metadata.durability = (weapon.metadata.durability or 0) - (item.durability or 0) * ((weapon.metadata.ammo or 0) - value)
             weapon.metadata.ammo = value
-        else return false end
+        else
+            return false
+        end
     elseif action == 'melee' then
         if not Grid.Integer(value, 0) then return false end
+
         weapon.metadata.durability = (weapon.metadata.durability or 0) - (item.durability or 1) * value
-    else return false end
-    if weapon.metadata.durability then weapon.metadata.durability = math.max(0, weapon.metadata.durability) end
+    else
+        return false
+    end
+
+    if weapon.metadata.durability then
+        weapon.metadata.durability = math.max(0, weapon.metadata.durability)
+    end
+
     commands[#commands + 1] = { kind = 'set', inventory = inv, slot = slot, record = weapon }
+
     local plan = Inventory.Assess(commands)
+
     return plan and Inventory.Apply(plan) or false
 end
 
@@ -2486,19 +3387,33 @@ end)
 
 lib.callback.register('ox_inventory:removeAmmoFromWeapon', function(source, slot)
     if not Grid.Integer(slot) then return false end
+
     local inv = Inventory(source)
+
     if not inv or inv.usingItem then return false end
+
     local original = inv.items[slot]
+
     if not original or not Grid.Integer(original.metadata.ammo) then return false end
+
     local item = Items(original.name)
     local ammo = item and item.ammoname and Items(item.ammoname)
+
     if not ammo then return false end
-    local credits = Inventory.PrepareItems(inv, ammo, original.metadata.ammo, original.metadata.specialAmmo and { type = original.metadata.specialAmmo } or {})
+
+    local credits = Inventory.PrepareItems(inv, ammo, original.metadata.ammo, original.metadata.specialAmmo and {
+        type = original.metadata.specialAmmo
+    } or {})
+
     if not credits then return false end
+
     local record = table.deepclone(original)
+
     record.metadata.ammo = 0
     credits[#credits + 1] = { kind = 'set', inventory = inv, slot = slot, record = record }
+
     local plan = Inventory.Assess(credits)
+
     return plan and Inventory.Apply(plan) or false
 end)
 
@@ -2577,8 +3492,13 @@ local function registerStash(name, label, slots, maxWeight, owner, groups, coord
 			if stash.type == 'stash' and stash.dbId == name then
 				stash.label = label or stash.label
 				stash.owner = (owner and owner ~= true) and stash.owner or owner
-				if slots then Inventory.SetSlotCount(stash, slots) end
-				if maxWeight then Inventory.SetMaxWeight(stash, maxWeight) end
+				if slots then
+				    Inventory.SetSlotCount(stash, slots)
+				end
+
+				if maxWeight then
+				    Inventory.SetMaxWeight(stash, maxWeight)
+				end
 				stash.groups = groups or stash.groups
 				stash.coords = coords or stash.coords
 				stash.instance = instance or stash.instance
@@ -2606,7 +3526,17 @@ function Inventory.CreateTemporaryStash(properties)
 
 	local name, slots, maxWeight, coords = checkStashProperties(properties)
     local records = generateItems({ id = name }, 'drop', properties.items)
-	local inventory = Inventory.Create(name, properties.label, 'temp', slots, 0, maxWeight, properties.owner, records, properties.groups)
+	local inventory = Inventory.Create(
+	    name,
+	    properties.label,
+	    'temp',
+	    slots,
+	    0,
+	    maxWeight,
+	    properties.owner,
+	    records,
+	    properties.groups
+	)
 
 	if not inventory then return end
 

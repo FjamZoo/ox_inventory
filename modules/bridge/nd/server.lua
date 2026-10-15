@@ -63,7 +63,9 @@ function server.syncInventory(inv)
 
     if accounts then
         local player = NDCore.getPlayer(inv.id)
+
         if not player then return end
+
         player.setData("cash", accounts.money)
     end
 end
