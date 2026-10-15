@@ -5,6 +5,7 @@ export type DragSource = {
   item: Pick<SlotWithItem, 'slot' | 'name'>;
   inventory: Inventory['type'];
   image?: string;
+  rotated?: boolean;
 };
 
 export type DropTarget = {

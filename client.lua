@@ -97,6 +97,13 @@ local defaultInventory = {
 
 local currentInventory = defaultInventory
 
+local function inventoryView(inventory)
+    inventory.grid = inventory.grid or { columns = 5, cells = inventory.slots }
+    inventory.recovery = inventory.recovery or {}
+    return inventory
+end
+
+
 local function closeTrunk()
 	if currentInventory.type == 'trunk' then
 		local coords = GetEntityCoords(playerPed, true)
@@ -286,12 +293,14 @@ function client.openInventory(inv, data)
     currentInventory = right or defaultInventory
     left.items = PlayerData.inventory
     left.groups = PlayerData.groups
+    left.recovery = left.recovery or PlayerData.recovery
+    left.grid = left.grid or PlayerData.grid
 
     SendNUIMessage({
         action = 'setupInventory',
         data = {
-            leftInventory = left,
-            rightInventory = currentInventory
+            leftInventory = inventoryView(left),
+            rightInventory = inventoryView(currentInventory)
         }
     })
 
@@ -344,12 +353,14 @@ RegisterNetEvent('ox_inventory:forceOpenInventory', function(left, right)
 	currentInventory.ignoreSecurityChecks = true
 	left.items = PlayerData.inventory
 	left.groups = PlayerData.groups
+    left.recovery = left.recovery or PlayerData.recovery
+    left.grid = left.grid or PlayerData.grid
 
 	SendNUIMessage({
 		action = 'setupInventory',
 		data = {
-			leftInventory = left,
-			rightInventory = currentInventory
+			leftInventory = inventoryView(left),
+			rightInventory = inventoryView(currentInventory)
 		}
 	})
 end)
@@ -995,6 +1006,32 @@ RegisterNetEvent('ox_inventory:updateSlots', function(items, weights)
 	if source ~= '' and next(items) then updateInventory(items, weights) end
 end)
 
+RegisterNetEvent('ox_inventory:syncInventory', function(data)
+    if source == '' or type(data) ~= 'table' then return end
+    local ownInventory = data.id == cache.serverId
+    if not ownInventory and (not invOpen or data.id ~= currentInventory.id) then return end
+
+    inventoryView(data)
+    if ownInventory then
+        local updates = {}
+        for slot in pairs(PlayerData.inventory) do
+            if not data.items[slot] then updates[#updates + 1] = { item = { slot = slot }, inventory = cache.serverId } end
+        end
+        for _, item in pairs(data.items) do
+            updates[#updates + 1] = { item = item, inventory = cache.serverId }
+        end
+        updateInventory(updates, data.weight)
+        PlayerData.grid = data.grid
+        PlayerData.recovery = data.recovery
+        PlayerData.maxWeight = data.maxWeight
+        data.type = 'player'
+    else
+        data.type = currentInventory.type
+        for key, value in pairs(data) do currentInventory[key] = value end
+    end
+    SendNUIMessage({ action = 'refreshSlots', data = { inventory = data } })
+end)
+
 RegisterNetEvent('ox_inventory:inventoryReturned', function(data)
 	if source == '' then return end
 	if currentWeapon then currentWeapon = Weapon.Disarm(currentWeapon) end
@@ -1009,7 +1046,9 @@ RegisterNetEvent('ox_inventory:inventoryReturned', function(data)
 		items[num] = { item = slotData, inventory = cache.serverId }
 	end
 
-	updateInventory(items, data[3])
+    PlayerData.grid = data.grid or PlayerData.grid
+    PlayerData.recovery = data.recovery or {}
+	updateInventory(items, data[2])
 end)
 
 RegisterNetEvent('ox_inventory:inventoryConfiscated', function(message)
@@ -1026,6 +1065,7 @@ RegisterNetEvent('ox_inventory:inventoryConfiscated', function(message)
 		items[num] = { item = { slot = slot }, inventory = cache.serverId }
 	end
 
+    PlayerData.recovery = {}
 	updateInventory(items, 0)
 end)
 
@@ -1106,7 +1146,7 @@ RegisterNetEvent('ox_inventory:createDrop', function(dropId, data, owner, slot)
 			else
 				SendNUIMessage({
 					action = 'setupInventory',
-					data = { rightInventory = currentInventory }
+					data = { rightInventory = inventoryView(currentInventory) }
 				})
 			end
 		end
@@ -1201,7 +1241,7 @@ lib.onCache('vehicle', function()
 	end
 end)
 
-RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inventory, weight, player)
+RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inventory, weight, player, grid, recovery)
 	if source == '' then return end
 
     ---@class PlayerData
@@ -1212,6 +1252,8 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 	PlayerData.id = cache.playerId
 	PlayerData.source = cache.serverId
     PlayerData.maxWeight = shared.playerweight
+    PlayerData.grid = grid or { columns = 5, cells = shared.playerslots }
+    PlayerData.recovery = recovery or {}
 
 	setmetatable(PlayerData, {
 		__index = function(self, key)
@@ -1235,6 +1277,8 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 		end
 
 		ItemData[v.name] = {
+			name = v.name,
+			size = v.size,
 			label = v.label,
 			stack = v.stack,
 			close = v.close,
@@ -1343,7 +1387,11 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			locale = uiLocales,
 			items = ItemData,
 			leftInventory = {
-				id = cache.playerId,
+				id = cache.serverId,
+                type = 'player',
+                grid = PlayerData.grid,
+                recovery = PlayerData.recovery,
+                weight = PlayerData.weight,
 				slots = shared.playerslots,
 				items = PlayerData.inventory,
 				maxWeight = shared.playerweight,
@@ -1608,12 +1656,14 @@ RegisterNetEvent('ox_inventory:viewInventory', function(left, right)
     currentInventory.type = 'inspect'
 	left.items = PlayerData.inventory
 	left.groups = PlayerData.groups
+    left.recovery = left.recovery or PlayerData.recovery
+    left.grid = left.grid or PlayerData.grid
 
 	SendNUIMessage({
 		action = 'setupInventory',
 		data = {
-			leftInventory = left,
-			rightInventory = currentInventory
+			leftInventory = inventoryView(left),
+			rightInventory = inventoryView(currentInventory)
 		}
 	})
 end)
@@ -1624,7 +1674,8 @@ RegisterNUICallback('uiLoaded', function(_, cb)
 end)
 
 RegisterNUICallback('getItemData', function(itemName, cb)
-	cb(Items[itemName])
+	local item = type(itemName) == 'string' and Items[itemName]
+    cb(item or false)
 end)
 
 RegisterNUICallback('removeComponent', function(data, cb)
@@ -1813,6 +1864,7 @@ local swapActive = false
 RegisterNUICallback('swapItems', function(data, cb)
     if swapActive or not invOpen or invBusy or usingItem then return cb(false) end
 
+    if type(data) ~= 'table' or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then return cb(false) end
     swapActive = true
 
 	if data.toType == 'newdrop' then
@@ -1832,7 +1884,10 @@ RegisterNUICallback('swapItems', function(data, cb)
 				local retval, hit, endCoords = GetShapeTestResult(handle)
 
 				if retval ~= 1 then
-					if not hit then return end
+                    if not hit then
+                        swapActive = false
+                        return cb(false)
+                    end
 
 					data.coords = vec3(endCoords.x, endCoords.y, endCoords.z + 1.0)
 
@@ -1876,7 +1931,19 @@ RegisterNUICallback('swapItems', function(data, cb)
 	end
 end)
 
+RegisterNUICallback('recoverItem', function(data, cb)
+    if swapActive or not invOpen or invBusy or usingItem then return cb(false) end
+    if type(data) ~= 'table' or type(data.fromType) ~= 'string' or type(data.recoveryId) ~= 'string'
+        or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then return cb(false) end
+    swapActive = true
+    local success = lib.callback.await('ox_inventory:recoverItem', false, data)
+    swapActive = false
+    cb(success or false)
+end)
+
 RegisterNUICallback('buyItem', function(data, cb)
+    if swapActive or not invOpen or invBusy or usingItem then return cb(false) end
+    swapActive = true
 	---@type boolean, false | { [1]: number, [2]: SlotWithItem, [3]: SlotWithItem | false, [4]: number}, NotifyProps
 	local response, data, message = lib.callback.await('ox_inventory:buyItem', 100, data)
 
@@ -1907,22 +1974,30 @@ RegisterNUICallback('buyItem', function(data, cb)
 		lib.notify(message)
 	end
 
-	cb(response)
+	swapActive = false
+    cb(response or false)
 end)
 
 RegisterNUICallback('craftItem', function(data, cb)
-	cb(true)
+    if swapActive or not invOpen or invBusy or usingItem or currentInventory.type ~= 'crafting' then return cb(false) end
+    if type(data) ~= 'table' or type(data.count) ~= 'number' or data.count < 1 or data.count % 1 ~= 0 then return cb(false) end
+    swapActive = true
 
 	local id, index = currentInventory.id, currentInventory.index
+    local completed = true
 
 	for i = 1, data.count do
-		local success, response = lib.callback.await('ox_inventory:craftItem', 200, id, index, data.fromSlot, data.toSlot)
+		local success, response = lib.callback.await('ox_inventory:craftItem', 200, id, index, data.fromSlot, data.toSlot, data.rotated)
 
 		if not success then
+            completed = false
 			if response then lib.notify({ type = 'error', description = locale(response or 'cannot_perform') }) end
 			break
 		end
 	end
+
+    swapActive = false
+    cb(completed)
 
 	if currentInventory.type ~= 'crafting' then
 		client.openInventory('crafting', { id = id, index = index })

@@ -8,10 +8,13 @@ export enum InventoryType {
 }
 
 export type Inventory = {
-  id: string;
+  id: string | number;
   type: string;
   slots: number;
   items: Slot[];
+  grid?: { columns: number; cells: number };
+  recovery?: Array<{ id: string; reason: string; record: unknown }>;
+  weight?: number;
   maxWeight?: number;
   label?: string;
   groups?: Record<string, number>;

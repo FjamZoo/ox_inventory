@@ -7,9 +7,6 @@ export type State = {
   itemAmount: number;
   shiftPressed: boolean;
   isBusy: boolean;
+  dragRotated?: boolean;
   additionalMetadata: Array<{ metadata: string; value: string }>;
-  history?: {
-    leftInventory: Inventory;
-    rightInventory: Inventory;
-  };
 };
