@@ -4,6 +4,7 @@ local function useExport(resource, export)
 	end
 end
 
+local Grid = require 'modules.inventory.grid'
 local ItemList = {}
 local isServer = IsDuplicityVersion()
 
@@ -16,6 +17,8 @@ end
 ---@param data OxItem
 local function newItem(data)
 	data.weight = data.weight or 0
+    local width, height = Grid.size(data)
+    data.size = { width = width, height = height }
 
 	if data.close == nil then
 		data.close = true
@@ -102,6 +105,8 @@ for type, data in pairs(lib.load('data.weapons') or {}) do
 			end
 		end
 
+        local width, height = Grid.size(v)
+        v.size = { width = width, height = height }
 		ItemList[k] = v
 	end
 end

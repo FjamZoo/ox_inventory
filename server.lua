@@ -50,7 +50,7 @@ function server.setPlayerInventory(player, data)
                     totalWeight = totalWeight + weight
 
                     inventory[v.slot] = { name = item.name, label = item.label, weight = weight, slot = v.slot, count = v
-                    .count, description = item.description, metadata = v.metadata, stack = item.stack, close = item
+                    .count, description = item.description, metadata = v.metadata, rotated = v.rotated, stack = item.stack, close = item
                     .close }
                 end
             end
@@ -453,7 +453,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                     { type = 'error', description = locale('not_enough_durability', label) })
             end
 
-            if data.count > 1 and consume < 1 and consume > 0 and not Inventory.GetEmptySlot(inventory) then
+            if data.count > 1 and consume < 1 and consume > 0 and not Inventory.GetEmptySlot(inventory, item) then
                 return TriggerClientEvent('ox_lib:notify', source,
                     { type = 'error', description = locale('cannot_use', label) })
             end
@@ -534,6 +534,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
 
                 durability = consume ~= 0 and consume < 1 and data.metadata.durability --[[@as number | false]]
 
+                local splitConsumed = false
                 if durability then
                     if durability > 100 then
                         local degrade = (data.metadata.degrade or item.degrade) * 60
@@ -543,18 +544,16 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                     end
 
                     if data.count > 1 then
-                        local emptySlot = Inventory.GetEmptySlot(inventory)
-
-                        if emptySlot then
-                            local ok, newItem = Inventory.SetSlot(inventory, item, 1, table.deepclone(data.metadata),
-                                emptySlot)
-
-                            if ok and newItem then
-                                Items.UpdateDurability(inventory, newItem --[[@as SlotWithItem]], item, durability)
-                            end
-                        end
-
-                        durability = 0
+                        local emptySlot, rotated = Inventory.GetEmptySlot(inventory, item)
+                        if not emptySlot then hooks.success = false return end
+                        local metadata = table.deepclone(data.metadata)
+                        -- Free the original unit's weight before placing its worn copy.
+                        if not Inventory.SetSlot(inventory, item, -1, data.metadata, data.slot) then hooks.success = false return end
+                        local ok, newItem = Inventory.SetSlot(inventory, item, 1, metadata, emptySlot, rotated)
+                        assert(ok and newItem, 'durability split changed between planning and commit')
+                        Items.UpdateDurability(inventory, newItem, item, durability)
+                        inventory:syncSlotsWithClients({ { item = inventory.items[data.slot], inventory = inventory.id } }, true)
+                        splitConsumed = true
                     else
                         Items.UpdateDurability(inventory, data, item, durability)
                     end
@@ -564,7 +563,7 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
                     end
                 end
 
-                if not durability then
+                if not durability and not splitConsumed then
                     Inventory.RemoveItem(inventory.id, data.name, consume < 1 and 1 or consume, nil, data.slot)
                 else
                     inventory.changed = true

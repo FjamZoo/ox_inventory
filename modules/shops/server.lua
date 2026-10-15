@@ -3,6 +3,7 @@ if not lib then return end
 local Items = require 'modules.items.server'
 local Inventory = require 'modules.inventory.server'
 local TriggerEventHooks = require 'modules.hooks.server'
+local GetLocks = require 'modules.locks'
 local Shops = {}
 local locations = shared.target and 'targets' or 'locations'
 
@@ -29,6 +30,7 @@ local function setupShopItems(id, shopType, shopName, groups)
 				name = Item.name,
 				slot = i,
 				weight = Item.weight,
+                size = Item.size,
 				count = slot.count,
 				price = (server.randomprices and (not slot.currency or slot.currency == 'money')) and (math.ceil(slot.price * (math.random(80, 120)/100))) or slot.price or 0,
 				metadata = slot.metadata,
@@ -198,12 +200,23 @@ local function isRequiredGrade(grade, rank)
 end
 
 lib.callback.register('ox_inventory:buyItem', function(source, data)
+    local Grid = Inventory.Grid
+    if type(data) ~= 'table' or not Grid.integer(data.fromSlot) or not Grid.integer(data.toSlot)
+        or (data.count ~= nil and not Grid.integer(data.count))
+        or (data.rotated ~= nil and type(data.rotated) ~= 'boolean') then return false end
 	if data.toType == 'player' then
 		data.count = math.max(1, math.floor(data.count or 1))
 
 		local playerInv = Inventory(source)
 
 		if not playerInv or not playerInv.currentShop then return end
+
+        local locks <close> = GetLocks({
+            ('inventory-%s:grid'):format(playerInv.id),
+            ('inventory-%s:slot-%s'):format(playerInv.id, data.toSlot),
+            ('shop-%s:slot-%s'):format(playerInv.currentShop, data.fromSlot),
+        })
+        if not locks then return false end
 
 		local shopType, shopId = playerInv.currentShop:match('^(.-) (%d-)$')
 
@@ -247,7 +260,10 @@ lib.callback.register('ox_inventory:buyItem', function(source, data)
 			local price = count * fromData.price
 
 			if toData == nil or (fromItem.name == toItem?.name and fromItem.stack and table.matches(toData.metadata, metadata)) then
-				local newWeight = playerInv.weight + (fromItem.weight + (metadata?.weight or 0)) * count
+                local orientation = data.rotated
+                if toData then orientation = toData.rotated end
+                if not Grid.fits(playerInv, fromItem, data.toSlot, orientation, toData and { [data.toSlot] = true }) then return false end
+				local newWeight = playerInv.weight + Inventory.SlotWeight(fromItem, { count = count, metadata = metadata })
 
 				if newWeight > playerInv.maxWeight then
 					return false, false, { type = 'error', description = locale('cannot_carry') }
@@ -278,7 +294,8 @@ lib.callback.register('ox_inventory:buyItem', function(source, data)
 					currency = currency,
 				})
 
-				if not hooks.success or not Inventory.SetSlot(playerInv, fromItem, count, metadata, data.toSlot) then
+				if not hooks.success or Inventory(source) ~= playerInv or canAffordItem(playerInv, currency, price) ~= true
+                    or not Inventory.SetSlot(playerInv, fromItem, count, metadata, data.toSlot, data.rotated) then
 					if fromData.count then
 						fromData.count += count
 					end
@@ -286,7 +303,6 @@ lib.callback.register('ox_inventory:buyItem', function(source, data)
 					return false
 				end
 
-				playerInv.weight = newWeight
 				removeCurrency(playerInv, currency, price)
 
 				if server.syncInventory then server.syncInventory(playerInv) end

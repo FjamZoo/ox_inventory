@@ -1237,6 +1237,7 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 		ItemData[v.name] = {
 			label = v.label,
 			stack = v.stack,
+            size = v.size,
 			close = v.close,
 			count = 0,
 			description = v.description,
@@ -1916,7 +1917,7 @@ RegisterNUICallback('craftItem', function(data, cb)
 	local id, index = currentInventory.id, currentInventory.index
 
 	for i = 1, data.count do
-		local success, response = lib.callback.await('ox_inventory:craftItem', 200, id, index, data.fromSlot, data.toSlot)
+		local success, response = lib.callback.await('ox_inventory:craftItem', 200, id, index, data.fromSlot, data.toSlot, data.rotated)
 
 		if not success then
 			if response then lib.notify({ type = 'error', description = locale(response or 'cannot_perform') }) end

@@ -562,3 +562,69 @@ body.inv-dragging {
   transform: translateY(200px);
   transition: all 200ms;
 }
+
+// Item rectangles share the same explicit rows/columns as their underlying cells.
+.inventory-grid-container {
+  position: relative;
+  align-content: start;
+}
+.inventory-grid-cell {
+  background: rgba(12, 12, 12, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+}
+.inventory-grid-container > .inventory-slot {
+  z-index: 1;
+  background-size: contain;
+  min-width: 0;
+}
+.grid-placement {
+  z-index: 2;
+  pointer-events: none;
+  border: 2px solid;
+  box-sizing: border-box;
+}
+.grid-placement.valid {
+  border-color: #64d68a;
+  background: rgba(64, 200, 100, 0.25);
+}
+.grid-placement.invalid {
+  border-color: #fa6262;
+  background: rgba(220, 50, 50, 0.25);
+}
+.grid-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 4px 0;
+}
+.inventory-recovery {
+  max-width: 52vh;
+  color: #ffd28a;
+  font-size: 12px;
+}
+.recovery-items {
+  display: grid;
+  grid-template-columns: repeat(5, 10.2vh);
+  grid-auto-rows: 10.42vh;
+  gap: 2px;
+  max-height: 22vh;
+  overflow-y: auto;
+}
+.item-drag-preview {
+  z-index: 10;
+  background-size: contain;
+  opacity: 0.65;
+}
+
+.inventory-item-image {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+  background: center / contain no-repeat;
+  pointer-events: none;
+}
+.inventory-grid-container .item-slot-wrapper {
+  position: relative;
+  z-index: 1;
+}

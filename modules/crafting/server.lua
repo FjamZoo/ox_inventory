@@ -17,6 +17,7 @@ local function createCraftingBench(id, data)
 
 			if item then
 				recipe.weight = item.weight
+                recipe.size = item.size
 				recipe.slot = i
 			else
 				warn(('failed to setup crafting recipe (bench: %s, slot: %s) - item "%s" does not exist'):format(id, i, recipe.name))
@@ -97,7 +98,8 @@ end)
 local TriggerEventHooks = require 'modules.hooks.server'
 local GetLocks = require 'modules.locks'
 
-lib.callback.register('ox_inventory:craftItem', function(source, id, index, recipeId, toSlot)
+lib.callback.register('ox_inventory:craftItem', function(source, id, index, recipeId, toSlot, rotated)
+    if not Inventory.Grid.integer(toSlot) or (rotated ~= nil and type(rotated) ~= 'boolean') then return false end
 	local left, bench = Inventory(source), CraftingBenches[id]
 
 	if not left then return end
@@ -122,75 +124,38 @@ lib.callback.register('ox_inventory:craftItem', function(source, id, index, reci
 			local craftedItem = Items(recipe.name)
 			local craftCount = (type(recipe.count) == 'number' and recipe.count) or (table.type(recipe.count) == 'array' and math.random(recipe.count[1], recipe.count[2])) or 1
 
-			-- Modified weight calculation
-			local newWeight = left.weight
-			local items = Inventory.Search(left, 'slots', tbl) or {}
-			---@todo new iterator or something to accept a map
-			-- First subtract weight of ingredients that will be removed
-			for name, needs in pairs(recipe.ingredients) do
-				if needs > 0 then
-					local item = Items(name)
-					if item then
-						newWeight -= (item.weight * needs)
-					end
-				end
-			end
-
-			-- Add weight of crafted item
-			newWeight += (craftedItem.weight + (recipe.metadata?.weight or 0)) * craftCount
-
-			if newWeight > left.maxWeight then return false, 'cannot_carry' end
-
 			local items = Inventory.Search(left, 'slots', tbl) or {}
 			table.wipe(tbl)
 
-			for name, needs in pairs(recipe.ingredients) do
-				if needs == 0 then break end
+            for name, needs in pairs(recipe.ingredients) do
+                local slots = items[name] or items
+                local remaining, found = needs, false
+                for _, slot in ipairs(slots) do
+                    if needs == 0 then
+                        if not slot.metadata.durability or slot.metadata.durability > 0 then
+                            tbl[slot.slot], found = 0, true
+                            break
+                        end
+                    elseif needs < 1 then
+                        local durability = slot.metadata.durability
+                        if durability and durability > 100 then
+                            local definition = Items(name)
+                            durability = (durability - os.time()) * 100 / ((slot.metadata.degrade or definition.degrade) * 60)
+                        end
+                        if durability and durability >= needs * 100 then
+                            tbl[slot.slot], found = needs, true
+                            break
+                        end
+                    else
+                        local count = math.min(remaining, slot.count)
+                        tbl[slot.slot], remaining = count, remaining - count
+                        if remaining == 0 then found = true break end
+                    end
+                end
+                if not found then return false end
+            end
 
-				local slots = items[name] or items
-
-                if #slots == 0 then return end
-
-				for i = 1, #slots do
-					local slot = slots[i]
-
-					if needs == 0 then
-						if not slot.metadata.durability or slot.metadata.durability > 0 then
-							break
-						end
-					elseif needs < 1 then
-						local item = Items(name)
-						local durability = slot.metadata.durability
-
-						if durability and durability >= needs * 100 then
-							if durability > 100 then
-								local degrade = (slot.metadata.degrade or item.degrade) * 60
-								local percentage = ((durability - os.time()) * 100) / degrade
-
-								if percentage >= needs * 100 then
-									tbl[slot.slot] = needs
-									break
-								end
-							else
-								tbl[slot.slot] = needs
-								break
-							end
-						end
-					elseif needs <= slot.count then
-						tbl[slot.slot] = needs
-						break
-					else
-						tbl[slot.slot] = slot.count
-						needs -= slot.count
-					end
-
-					if needs == 0 then break end
-					-- Player does not have enough items (ui should prevent crafting if lacking items, so this shouldn't trigger)
-					if needs > 0 and i == #slots then return end
-				end
-			end
-
-            local lockIds = {}
+            local lockIds = { ('inventory-%s:grid'):format(left.id) }
 
             for slot in pairs(tbl) do
                 lockIds[#lockIds + 1] = ('inventory-%s:slot-%s'):format(left.id, slot)
@@ -200,6 +165,7 @@ lib.callback.register('ox_inventory:craftItem', function(source, id, index, reci
 
             if not activeSlots then return end
 
+            local ingredientsBefore = table.deepclone(left.items)
 			local hooks <close> = TriggerEventHooks('craftItem', {
 				source = source,
 				benchId = id,
@@ -213,59 +179,71 @@ lib.callback.register('ox_inventory:craftItem', function(source, id, index, reci
 
 			local success = lib.callback.await('ox_inventory:startCrafting', source, id, recipeId)
 
-			if success then
-				for name, needs in pairs(recipe.ingredients) do
-					if Inventory.GetItemCount(left, name) < needs then hooks.success = false return end
-				end
-
-				for slot, count in pairs(tbl) do
-					local invSlot = left.items[slot]
-
-					if not invSlot then hooks.success = false return end
-
-					if count < 1 then
-						local item = Items(invSlot.name)
-						local durability = invSlot.metadata.durability or 100
-
-						if durability > 100 then
-							local degrade = (invSlot.metadata.degrade or item.degrade) * 60
-							durability -= degrade * count
-						else
-							durability -= count * 100
-						end
-
-						if invSlot.count > 1 then
-							local emptySlot = Inventory.GetEmptySlot(left)
-
-							if emptySlot then
-								local ok, newItem = Inventory.SetSlot(left, item, 1, table.deepclone(invSlot.metadata), emptySlot)
-
-								if ok and newItem then
-                                    Items.UpdateDurability(left, newItem --[[@as SlotWithItem]], item, durability < 0 and 0 or durability)
-								end
-							end
-
-							invSlot.count -= 1
-                            invSlot.weight = Inventory.SlotWeight(item, invSlot)
-
-							left:syncSlotsWithClients({
-								{
-									item = invSlot,
-									inventory = left.id
-								}
-							}, true)
-						else
-                            Items.UpdateDurability(left, invSlot, item, durability < 0 and 0 or durability)
-						end
-					else
-						local removed = invSlot and Inventory.RemoveItem(left, invSlot.name, count, nil, slot)
-						-- Failed to remove item (inventory state unexpectedly changed?)
-						if not removed then hooks.success = false return end
-					end
-				end
-
-				Inventory.AddItem(left, craftedItem, craftCount, recipe.metadata or {}, craftedItem.stack and toSlot or nil)
-			end
+            if success then
+                if Inventory(source) ~= left then hooks.success = false return false end
+                -- Slots can change during the progress callback. Never consume a replacement item.
+                for slot in pairs(tbl) do
+                    if not left.items[slot] or not table.matches(left.items[slot], ingredientsBefore[slot]) then
+                        hooks.success = false return false
+                    end
+                end
+                local before = table.deepclone(left.items)
+                local simulation = { id = left.id, slots = left.slots, maxWeight = left.maxWeight,
+                    items = table.deepclone(left.items), weight = left.weight }
+                for slot, count in pairs(tbl) do
+                    local entry = simulation.items[slot]
+                    local definition = Items(entry.name)
+                    if count == 0 then
+                        -- Required tools are retained and must remain present through progress.
+                    elseif count >= 1 then
+                        entry.count = entry.count - count
+                        if entry.count <= 0 then simulation.items[slot] = nil end
+                    else
+                        local durability = entry.metadata.durability or 100
+                        if durability > 100 then durability = durability - (entry.metadata.degrade or definition.degrade) * 60 * count
+                        else durability = durability - count * 100 end
+                        if entry.count > 1 then
+                            entry.count = entry.count - 1
+                            if not (definition.decay and durability <= 0) then
+                                local anchor, orientation = Inventory.Grid.find(simulation, definition)
+                                if not anchor then hooks.success = false return false, 'inventory_full' end
+                                local split = table.deepclone(entry)
+                                split.slot, split.count, split.rotated = anchor, 1, orientation
+                                split.metadata.durability = math.max(0, durability)
+                                simulation.items[anchor] = split
+                            end
+                        elseif definition.decay and durability <= 0 then simulation.items[slot] = nil
+                        else entry.metadata.durability = math.max(0, durability) end
+                    end
+                end
+                simulation.weight = Inventory.CalculateWeight(simulation.items)
+                for _, entry in pairs(simulation.items) do entry.weight = Inventory.SlotWeight(Items(entry.name), entry) end
+                local plan, reason = Inventory.PlanAdd(simulation, craftedItem, craftCount, recipe.metadata or {}, toSlot, rotated, true)
+                -- Metadata hooks may yield: the transaction only commits against the same state.
+                if not plan or not table.matches(left.items, before) or Inventory(source) ~= left
+                    or left.slots ~= simulation.slots or left.maxWeight ~= simulation.maxWeight then
+                    hooks.success = false return false, reason or 'inventory_full'
+                end
+                for _, addition in ipairs(plan) do
+                    local target = simulation.items[addition.slot]
+                    local entry = { name = craftedItem.name, label = craftedItem.label, description = craftedItem.description,
+                        stack = craftedItem.stack, close = craftedItem.close, size = craftedItem.size,
+                        slot = addition.slot, rotated = addition.rotated, metadata = addition.metadata,
+                        count = addition.count + (target and target.count or 0) }
+                    entry.weight = Inventory.SlotWeight(craftedItem, entry)
+                    simulation.items[addition.slot] = entry
+                end
+                left.items, left.weight, left.changed = simulation.items, Inventory.CalculateWeight(simulation.items), true
+                local updates, seen = {}, {}
+                for slot, entry in pairs(left.items) do
+                    updates[#updates + 1] = { item = entry, inventory = left.id }; seen[slot] = true
+                end
+                for slot in pairs(before) do
+                    if not seen[slot] then updates[#updates + 1] = { item = { slot = slot }, inventory = left.id } end
+                end
+                left:syncSlotsWithClients(updates, true)
+                if server.syncInventory then server.syncInventory(left) end
+            end
 
 			return success
 		end

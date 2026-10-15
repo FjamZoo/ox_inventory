@@ -20,6 +20,8 @@ Refer to [NOTICE.md](./NOTICE.md) for additional information and legal notices.
 
 https://overextended.dev/docs/ox_inventory
 
+[Item sizes, grids, migration and export behavior](docs/item-grids.md)
+
 ## 💾 Download
 
 https://github.com/overextended/ox_inventory/releases/latest/download/ox_inventory.zip

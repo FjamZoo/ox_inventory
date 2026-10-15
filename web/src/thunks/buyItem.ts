@@ -10,6 +10,7 @@ export const buyItem = createAsyncThunk(
       toSlot: number;
       toType: string;
       count: number;
+      rotated?: boolean;
     },
     { rejectWithValue }
   ) => {

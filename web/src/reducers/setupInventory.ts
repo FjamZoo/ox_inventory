@@ -16,39 +16,43 @@ export const setupInventoryReducer: CaseReducer<
   if (leftInventory)
     state.leftInventory = {
       ...leftInventory,
-      items: Array.from(Array(leftInventory.slots), (_, index) => {
-        const item = Object.values(leftInventory.items).find((item) => item?.slot === index + 1) || {
-          slot: index + 1,
-        };
+      items: Array.from(
+        Array(Math.max(leftInventory.slots, ...Object.values(leftInventory.items).map((item) => item?.slot || 0))),
+        (_, index) => {
+          const item = Object.values(leftInventory.items).find((item) => item?.slot === index + 1) || {
+            slot: index + 1,
+          };
 
-        if (!item.name) return item;
+          if (!item.name) return item;
 
-        if (typeof Items[item.name] === 'undefined') {
-          getItemData(item.name);
+          if (typeof Items[item.name] === 'undefined') {
+            getItemData(item.name);
+          }
+
+          return { ...item, durability: itemDurability(item.metadata, curTime) };
         }
-
-        item.durability = itemDurability(item.metadata, curTime);
-        return item;
-      }),
+      ),
     };
 
   if (rightInventory)
     state.rightInventory = {
       ...rightInventory,
-      items: Array.from(Array(rightInventory.slots), (_, index) => {
-        const item = Object.values(rightInventory.items).find((item) => item?.slot === index + 1) || {
-          slot: index + 1,
-        };
+      items: Array.from(
+        Array(Math.max(rightInventory.slots, ...Object.values(rightInventory.items).map((item) => item?.slot || 0))),
+        (_, index) => {
+          const item = Object.values(rightInventory.items).find((item) => item?.slot === index + 1) || {
+            slot: index + 1,
+          };
 
-        if (!item.name) return item;
+          if (!item.name) return item;
 
-        if (typeof Items[item.name] === 'undefined') {
-          getItemData(item.name);
+          if (typeof Items[item.name] === 'undefined') {
+            getItemData(item.name);
+          }
+
+          return { ...item, durability: itemDurability(item.metadata, curTime) };
         }
-
-        item.durability = itemDurability(item.metadata, curTime);
-        return item;
-      }),
+      ),
     };
 
   state.shiftPressed = false;

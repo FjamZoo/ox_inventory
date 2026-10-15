@@ -9,9 +9,10 @@ export const swapSlotsReducer: CaseReducer<
     fromType: Inventory['type'];
     toSlot: SlotWithItem;
     toType: Inventory['type'];
+    rotated?: boolean;
   }>
 > = (state, action) => {
-  const { fromSlot, fromType, toSlot, toType } = action.payload;
+  const { fromSlot, fromType, toSlot, toType, rotated } = action.payload;
   const { sourceInventory, targetInventory } = getTargetInventory(state, fromType, toType);
   const curTime = Math.floor(Date.now() / 1000);
 
@@ -24,6 +25,7 @@ export const swapSlotsReducer: CaseReducer<
     {
       ...sourceInventory.items[fromSlot.slot - 1],
       slot: toSlot.slot,
+      rotated: rotated ?? fromSlot.rotated,
       durability: itemDurability(fromSlot.metadata, curTime),
     },
   ];

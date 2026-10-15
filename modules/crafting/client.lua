@@ -24,6 +24,7 @@ local function createCraftingBench(id, data)
 
 			if item then
 				recipe.weight = item.weight
+                recipe.size = item.size
 				recipe.slot = i
 			else
 				warn(('failed to setup crafting recipe (bench: %s, slot: %s) - item "%s" does not exist'):format(id, i, recipe.name))

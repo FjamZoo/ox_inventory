@@ -27,6 +27,7 @@ export const onCraft = (source: DragSource, target: DropTarget) => {
   const count = state.itemAmount === 0 ? 1 : state.itemAmount;
 
   const data = {
+    rotated: source.rotated,
     fromSlot: sourceSlot,
     toSlot: targetSlot,
     fromType: sourceInventory.type,
