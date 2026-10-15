@@ -5,6 +5,7 @@ import { useAppDispatch } from '../../store';
 import WeightBar from '../utils/WeightBar';
 import { onDrop } from '../../dnd/onDrop';
 import { onBuy } from '../../dnd/onBuy';
+import { dimensions } from '../../helpers/grid';
 import { Items } from '../../store/items';
 import { canCraftItem, canPurchaseItem, getItemUrl, isSlotWithItem } from '../../helpers';
 import { onUse } from '../../dnd/onUse';
@@ -21,10 +22,12 @@ interface SlotProps {
   inventoryType: Inventory['type'];
   inventoryGroups: Inventory['groups'];
   item: Slot;
+  gridManaged?: boolean;
+  style?: React.CSSProperties;
 }
 
 const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> = (
-  { item, inventoryId, inventoryType, inventoryGroups },
+  { item, inventoryId, inventoryType, inventoryGroups, gridManaged, style },
   ref
 ) => {
   const manager = useDragDropManager();
@@ -45,6 +48,8 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
         isSlotWithItem(item, inventoryType !== InventoryType.SHOP)
           ? {
               inventory: inventoryType,
+              rotated: item.rotated === true,
+              size: item.size || Items[item.name]?.size,
               item: {
                 name: item.name,
                 slot: item.slot,
@@ -100,7 +105,8 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
 
   const connectRef = (element: HTMLDivElement | null) => {
     if (!element) return;
-    drag(drop(element));
+    if (gridManaged) drag(element);
+    else drag(drop(element));
   };
 
   const handleContext = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -121,6 +127,8 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
   };
 
   const refs = useMergeRefs([connectRef, ref]);
+  const rotatedImage = item.rotated && style?.gridColumn !== undefined;
+  const footprint = dimensions(item);
 
   return (
     <div
@@ -129,15 +137,26 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
       onClick={handleClick}
       className="inventory-slot"
       style={{
+        ...style,
         filter:
           !canPurchaseItem(item, { type: inventoryType, groups: inventoryGroups }) || !canCraftItem(item, inventoryType)
             ? 'brightness(80%) grayscale(100%)'
             : undefined,
         opacity: isDragging ? 0.4 : 1.0,
-        backgroundImage: `url(${item?.name ? getItemUrl(item as SlotWithItem) : 'none'}`,
+        backgroundImage: rotatedImage ? undefined : `url(${item?.name ? getItemUrl(item as SlotWithItem) : 'none'}`,
         border: isOver ? '1px dashed rgba(255,255,255,0.4)' : '',
       }}
     >
+      {rotatedImage && (
+        <div
+          className="inventory-item-image"
+          style={{
+            backgroundImage: `url(${getItemUrl(item as SlotWithItem)})`,
+            width: `calc(${footprint.height} * 10.42vh + ${footprint.height - 1} * 2px)`,
+            height: `calc(${footprint.width} * 10.2vh + ${footprint.width - 1} * 2px)`,
+          }}
+        />
+      )}
       {isSlotWithItem(item) && (
         <div
           className="item-slot-wrapper"
@@ -161,6 +180,9 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
           >
             {inventoryType === 'player' && item.slot <= 5 && <div className="inventory-slot-number">{item.slot}</div>}
             <div className="item-slot-info-wrapper">
+              <p>
+                {(item.size || Items[item.name]?.size)?.width || 1}×{(item.size || Items[item.name]?.size)?.height || 1}
+              </p>
               <p>
                 {item.weight > 0
                   ? item.weight >= 1000

@@ -34,6 +34,7 @@ export const onBuy = (source: DragSource, target: DropTarget) => {
       : 1;
 
   const data = {
+    rotated: source.rotated,
     fromSlot: sourceSlot,
     toSlot: targetSlot,
     fromType: sourceInventory.type,

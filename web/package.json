@@ -5,6 +5,7 @@
   "homepage": "web/build",
   "type": "module",
   "scripts": {
+    "test": "bun test",
     "start": "vite",
     "watch": "vite build --watch",
     "build": "tsc && vite build",

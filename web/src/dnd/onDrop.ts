@@ -1,8 +1,9 @@
-import { canStack, findAvailableSlot, getTargetInventory, isSlotWithItem } from '../helpers';
+import { canStack, getTargetInventory, isSlotWithItem } from '../helpers';
 import { validateMove } from '../thunks/validateItems';
 import { store } from '../store';
 import { DragSource, DropTarget, InventoryType, SlotWithItem } from '../typings';
 import { moveSlots, stackSlots, swapSlots } from '../store/inventory';
+import { canPlace, fits } from '../helpers/grid';
 import { Items } from '../store/items';
 
 export const onDrop = (source: DragSource, target?: DropTarget) => {
@@ -29,7 +30,12 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
 
   const targetSlot = target
     ? targetInventory.items[target.item.slot - 1]
-    : findAvailableSlot(sourceSlot, sourceData, targetInventory.items);
+    : targetInventory.items.find(
+        (item) => item.name && sourceData.stack && canStack(sourceSlot, item) && item.slot <= targetInventory.slots
+      ) ||
+      targetInventory.items.find(
+        (item) => !item.name && fits(targetInventory, sourceSlot, item.slot, source.rotated ?? sourceSlot.rotated)
+      );
 
   if (targetSlot === undefined) return console.error('Target slot undefined!');
 
@@ -44,7 +50,22 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
         ? sourceSlot.count
         : state.itemAmount;
 
+  const rotated = source.rotated ?? sourceSlot.rotated ?? false;
+  if (
+    !canPlace(
+      sourceInventory,
+      targetInventory,
+      sourceSlot,
+      targetSlot.slot,
+      count,
+      rotated,
+      !!targetSlot.name && sourceData.stack && canStack(sourceSlot, targetSlot)
+    )
+  )
+    return;
+
   const data = {
+    rotated,
     fromSlot: sourceSlot,
     toSlot: targetSlot,
     fromType: sourceInventory.type,
@@ -59,6 +80,11 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
       toSlot: targetSlot.slot,
     })
   );
+
+  if (sourceInventory.id === targetInventory.id && sourceSlot.slot === targetSlot.slot) {
+    store.dispatch(moveSlots(data));
+    return;
+  }
 
   isSlotWithItem(targetSlot, true)
     ? sourceData.stack && canStack(sourceSlot, targetSlot)
