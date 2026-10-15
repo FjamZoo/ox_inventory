@@ -1,5 +1,4 @@
 import { Inventory, InventoryType, ItemData, Slot, SlotWithItem, State } from '../typings';
-import { isEqual } from 'lodash-es';
 import { store } from '../store';
 import { Items } from '../store/items';
 import { imagepath } from '../store/imagepath';
@@ -81,17 +80,6 @@ export const canCraftItem = (item: Slot, inventoryType: string) => {
 export const isSlotWithItem = (slot: Slot, strict: boolean = false): slot is SlotWithItem =>
   (slot.name !== undefined && slot.weight !== undefined) ||
   (strict && slot.name !== undefined && slot.count !== undefined && slot.weight !== undefined);
-
-export const canStack = (sourceSlot: Slot, targetSlot: Slot) =>
-  sourceSlot.name === targetSlot.name && isEqual(sourceSlot.metadata, targetSlot.metadata);
-
-export const findAvailableSlot = (item: Slot, data: ItemData, items: Slot[]) => {
-  if (!data.stack) return items.find((target) => target.name === undefined);
-
-  const stackableSlot = items.find((target) => target.name === item.name && isEqual(target.metadata, item.metadata));
-
-  return stackableSlot || items.find((target) => target.name === undefined);
-};
 
 export const getTargetInventory = (
   state: State,

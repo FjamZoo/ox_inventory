@@ -1,5 +1,6 @@
 export type Slot = {
   slot: number;
+  rotated?: boolean;
   name?: string;
   count?: number;
   weight?: number;

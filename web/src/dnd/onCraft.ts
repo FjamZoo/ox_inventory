@@ -3,9 +3,12 @@ import { DragSource, DropTarget } from '../typings';
 import { isSlotWithItem } from '../helpers';
 import { Items } from '../store/items';
 import { craftItem } from '../thunks/craftItem';
+import { assessPlacement } from '../helpers/grid';
 
 export const onCraft = (source: DragSource, target: DropTarget) => {
   const { inventory: state } = store.getState();
+
+  if (state.isBusy || target.inventory !== 'player') return;
 
   const sourceInventory = state.rightInventory;
   const targetInventory = state.leftInventory;
@@ -26,19 +29,33 @@ export const onCraft = (source: DragSource, target: DropTarget) => {
 
   const count = state.itemAmount === 0 ? 1 : state.itemAmount;
 
+  const rotated = source.rotated ?? false;
+  const placement = assessPlacement({
+    sourceInventory,
+    targetInventory,
+    source: sourceSlot,
+    toSlot: targetSlot.slot,
+    count,
+    rotated,
+    definitions: Items,
+  });
+
+  if (!placement.valid) return;
+
   const data = {
     fromSlot: sourceSlot,
     toSlot: targetSlot,
     fromType: sourceInventory.type,
     toType: targetInventory.type,
     count,
+    rotated,
   };
 
   store.dispatch(
     craftItem({
       ...data,
       fromSlot: sourceSlot.slot,
-      toSlot: targetSlot.slot,
+      toSlot: placement.anchor,
     })
   );
 };

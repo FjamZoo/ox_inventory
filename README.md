@@ -20,6 +20,8 @@ Refer to [NOTICE.md](./NOTICE.md) for additional information and legal notices.
 
 https://overextended.dev/docs/ox_inventory
 
+[Item sizes, grid placement and saved-inventory recovery](./docs/item-sizes.md)
+
 ## 💾 Download
 
 https://github.com/overextended/ox_inventory/releases/latest/download/ox_inventory.zip

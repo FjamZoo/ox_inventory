@@ -98,6 +98,7 @@ CreateThread(function()
 						-- temporary solution for nil values
 						itemStr = itemStr:gsub('[%s]-[%w]+ = "?nil"?,?', '')
 						file[fileSize] = itemStr
+						item.size = { width = 1, height = 1 }
 						ItemList[item.name] = item
 					end
 				end
@@ -326,15 +327,9 @@ function Items.UpdateDurability(inv, slot, item, value, ostime)
 
     if slot.metadata.durability == durability then return end
 
-    inv.changed = true
-    slot.metadata.durability = durability
-
-    inv:syncSlotsWithClients({
-        {
-            item = slot,
-            inventory = inv.id
-        }
-    }, true)
+    local metadata = table.deepclone(slot.metadata)
+    metadata.durability = durability
+    Inventory.SetMetadata(inv, slot.slot, metadata)
 end
 
 ---@deprecated

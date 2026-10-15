@@ -1,3 +1,11 @@
+local Grid = require 'modules.inventory.grid'
+
+---@class OxItem
+---@field size ItemSize
+
+---@class SlotWithItem
+---@field rotated? boolean
+
 local function useExport(resource, export)
 	return function(...)
 		return exports[resource][export](nil, ...)
@@ -16,6 +24,7 @@ end
 ---@param data OxItem
 local function newItem(data)
 	data.weight = data.weight or 0
+	data.size = Grid.Size(data.size)
 
 	if data.close == nil then
 		data.close = true
@@ -75,6 +84,7 @@ end
 
 for type, data in pairs(lib.load('data.weapons') or {}) do
 	for k, v in pairs(data) do
+		v.size = Grid.Size(v.size)
 		v.name = k
 		v.close = type == 'Ammo' and true or false
         v.weight = v.weight or 0

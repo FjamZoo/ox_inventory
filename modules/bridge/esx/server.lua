@@ -53,7 +53,10 @@ function server.syncInventory(inv)
 
     if accounts then
         local player = server.GetPlayerFromId(inv.id)
-        player.syncInventory(inv.weight, inv.maxWeight, inv.items, accounts)
+
+        if player then
+            player.syncInventory(inv.weight, inv.maxWeight, inv.items, accounts)
+        end
     end
 end
 

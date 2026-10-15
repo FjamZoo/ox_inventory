@@ -1,0 +1,15 @@
+Native CfxLua baseline captured before production grid edits.
+
+Default compatibility suite: 10 passed, 0 failed.
+Explicit --baseline suite: 4 passed, 0 failed.
+  AddItem rifle 4x2 at anchor 1 then phone at anchor 2 returned true. Weight 4100.
+  AddItem rifle 4x2 at anchor 30 in a 30-cell inventory returned true. Weight 4000.
+  CanCarryItem second rifle against maxWeight 5000 returned false. Existing weight 4000.
+  Direct AddItem second rifle against maxWeight 5000 returned true. Final weight 8000.
+Explicit --grid suite: 0 passed, 2 failed.
+  Covered-cell rejection expected false, received true.
+  Off-edge rejection expected false, received true.
+
+Real modules: modules/inventory/server.lua, modules/shops/server.lua,
+modules/crafting/server.lua, modules/hooks/server.lua, modules/locks.lua.
+Fixture limits are documented in tests/README.md.

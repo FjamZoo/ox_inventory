@@ -14,6 +14,8 @@ local Query = {
     UPDATE_PLAYER = 'UPDATE `{user_table}` SET inventory = ? WHERE `{user_column}` = ?',
 }
 
+local playerGridName = '__ox_inventory_player_grid'
+
 Citizen.CreateThreadNow(function()
     local playerTable, playerColumn, vehicleTable, vehicleColumn
 
@@ -116,19 +118,70 @@ Citizen.CreateThreadNow(function()
     local clearStashes = GetConvar('inventory:clearstashes', '6 MONTH')
 
     if clearStashes ~= '' then
-        pcall(MySQL.query.await, ('DELETE FROM ox_inventory WHERE lastupdated < (NOW() - INTERVAL %s)'):format(clearStashes))
+        pcall(
+            MySQL.query.await,
+            ('DELETE FROM ox_inventory WHERE name <> ? AND lastupdated < (NOW() - INTERVAL %s)'):format(clearStashes),
+            { playerGridName }
+        )
     end
 end)
 
 db = {}
 
 function db.loadPlayer(identifier)
+    if shared.framework == 'esx' then
+        local inventory = db.loadPlayerGrid(identifier)
+
+        if inventory then
+            return inventory
+        end
+    end
+
     local inventory = MySQL.prepare.await(Query.SELECT_PLAYER, { identifier }) --[[@as string?]]
-    return inventory and json.decode(inventory)
+    return inventory
+end
+
+function db.loadPlayerGrid(owner)
+    return MySQL.prepare.await(Query.SELECT_STASH, { tostring(owner), playerGridName })
+end
+
+local function playerWrite(owner, inventory)
+    if shared.framework == 'esx' then
+        inventory = inventory or '[]'
+    end
+
+    local queries = { { query = Query.UPDATE_PLAYER, values = { inventory, owner } } }
+
+    if shared.framework == 'esx' then
+        queries[#queries + 1] = { query = Query.UPSERT_STASH, values = { inventory, tostring(owner), playerGridName } }
+    end
+
+    return queries
 end
 
 function db.savePlayer(owner, inventory)
+    if shared.framework == 'esx' then
+        return MySQL.transaction.await(playerWrite(owner, inventory))
+    end
+
     return MySQL.prepare.await(Query.UPDATE_PLAYER, { inventory, owner })
+end
+
+function db.restorePlayer(owner, inventory)
+    local queries = playerWrite(owner, inventory)
+    queries[#queries + 1] = {
+        query = 'DELETE FROM ox_inventory WHERE name = ? AND owner = ?',
+        values = { owner, tostring(owner) },
+    }
+
+    return MySQL.transaction.await(queries)
+end
+
+function db.confiscatePlayer(owner, inventory)
+    local queries = playerWrite(owner, '[]')
+    queries[#queries + 1] = { query = Query.UPSERT_STASH, values = { inventory, tostring(owner), owner } }
+
+    return MySQL.transaction.await(queries)
 end
 
 function db.saveStash(owner, dbId, inventory)
@@ -194,7 +247,20 @@ function db.saveInventories(players, trunks, gloveboxes, stashes, total)
         pending += 1
 
         Citizen.CreateThreadNow(function()
-            local resp = safeQuery(MySQL.prepare.await, Query.UPDATE_PLAYER, players)
+            local resp
+
+            if shared.framework == 'esx' then
+                resp = 0
+
+                for _, player in ipairs(players) do
+                    if safeQuery(db.savePlayer, player[2], player[1]) then
+                        resp += 1
+                    end
+                end
+            else
+                resp = safeQuery(MySQL.prepare.await, Query.UPDATE_PLAYER, players)
+            end
+
             pending -= 1
 
             if resp then

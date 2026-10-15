@@ -19,17 +19,23 @@ window.XMLHttpRequest = window.fetch;
 
 const resourceName = (window as any).GetParentResourceName ? (window as any).GetParentResourceName() : 'ox_inventory';
 
-export async function fetchNui<T>(eventName: string, data?: unknown): Promise<T> {
-  if (isEnvBrowser()) return undefined as any; // HACK FOR BORING ERRORS IN DEV
+let fixture: ((eventName: string, data: unknown) => unknown) | undefined;
 
+export const setNuiFixture = (handler: typeof fixture) => {
+  fixture = handler;
+};
+
+export async function fetchNui<T>(eventName: string, data?: unknown): Promise<T> {
   try {
-    const resp = await fetch(`https://${resourceName}/${eventName}`, {
-      method: 'post',
-      headers: {
-        'Content-Type': 'application/json; charset=UTF-8',
-      },
-      body: JSON.stringify(data),
-    });
+    const resp = isEnvBrowser()
+      ? new Response(JSON.stringify(fixture ? fixture(eventName, data) : false))
+      : await fetch(`https://${resourceName}/${eventName}`, {
+          method: 'post',
+          headers: {
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: JSON.stringify(data),
+        });
 
     const respFormatted = await resp.json();
 

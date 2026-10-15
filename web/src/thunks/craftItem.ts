@@ -4,13 +4,13 @@ import { fetchNui } from '../utils/fetchNui';
 export const craftItem = createAsyncThunk(
   'inventory/craftItem',
   async (
-    data: { fromSlot: number; fromType: string; toSlot: number; toType: string; count: number },
+    data: { fromSlot: number; fromType: string; toSlot: number; toType: string; count: number; rotated?: boolean },
     { rejectWithValue }
   ) => {
     try {
       const response = await fetchNui<boolean>('craftItem', data);
 
-      if (response === false) {
+      if (response !== true) {
         return rejectWithValue(response);
       }
     } catch (error) {

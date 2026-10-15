@@ -13,10 +13,12 @@ import { closeTooltip } from '../../store/tooltip';
 import InventoryContext from './InventoryContext';
 import { closeContextMenu } from '../../store/contextMenu';
 import Fade from '../utils/transitions/Fade';
+import { useDragDropManager } from 'react-dnd';
 
 const Inventory: React.FC = () => {
   const [inventoryVisible, setInventoryVisible] = useState(false);
   const dispatch = useAppDispatch();
+  const manager = useDragDropManager();
 
   useNuiEvent<boolean>('setInventoryVisible', setInventoryVisible);
   useNuiEvent<false>('closeInventory', () => {
@@ -30,11 +32,15 @@ const Inventory: React.FC = () => {
     leftInventory?: InventoryProps;
     rightInventory?: InventoryProps;
   }>('setupInventory', (data) => {
+    manager.dispatch({ type: 'dnd-core/END_DRAG' });
     dispatch(setupInventory(data));
     !inventoryVisible && setInventoryVisible(true);
   });
 
-  useNuiEvent('refreshSlots', (data) => dispatch(refreshSlots(data)));
+  useNuiEvent('refreshSlots', (data) => {
+    manager.dispatch({ type: 'dnd-core/END_DRAG' });
+    dispatch(refreshSlots(data));
+  });
 
   useNuiEvent('displayMetadata', (data: Array<{ metadata: string; value: string }>) => {
     dispatch(setAdditionalMetadata(data));

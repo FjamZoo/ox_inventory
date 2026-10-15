@@ -1,0 +1,32 @@
+{
+  "occupancy": [
+    { "name": "default size at last cell", "grid": { "columns": 5, "cells": 13 }, "slot": 13, "cells": [13] },
+    { "name": "rifle at first anchor", "grid": { "columns": 5, "cells": 30 }, "slot": 1, "size": { "width": 4, "height": 2 }, "cells": [1, 2, 3, 4, 6, 7, 8, 9] },
+    { "name": "rifle against right edge", "grid": { "columns": 5, "cells": 30 }, "slot": 2, "size": { "width": 4, "height": 2 }, "cells": [2, 3, 4, 5, 7, 8, 9, 10] },
+    { "name": "rifle wraps a row", "grid": { "columns": 5, "cells": 30 }, "slot": 3, "size": { "width": 4, "height": 2 }, "cells": null },
+    { "name": "rotated rifle at right edge", "grid": { "columns": 5, "cells": 30 }, "slot": 4, "size": { "width": 4, "height": 2 }, "rotated": true, "cells": [4, 5, 9, 10, 14, 15, 19, 20] },
+    { "name": "rotated rifle wraps a row", "grid": { "columns": 5, "cells": 30 }, "slot": 5, "size": { "width": 4, "height": 2 }, "rotated": true, "cells": null },
+    { "name": "partial last row fits exactly", "grid": { "columns": 5, "cells": 13 }, "slot": 11, "size": { "width": 3, "height": 1 }, "cells": [11, 12, 13] },
+    { "name": "partial last row lacks a cell", "grid": { "columns": 5, "cells": 13 }, "slot": 11, "size": { "width": 4, "height": 1 }, "cells": null },
+    { "name": "vertical footprint reaches partial row", "grid": { "columns": 5, "cells": 13 }, "slot": 8, "size": { "width": 1, "height": 2 }, "cells": [8, 13] },
+    { "name": "rectangle exceeds partial row", "grid": { "columns": 5, "cells": 13 }, "slot": 8, "size": { "width": 2, "height": 2 }, "cells": null },
+    { "name": "wide item needs rotation", "grid": { "columns": 5, "cells": 30 }, "slot": 5, "size": { "width": 6, "height": 1 }, "cells": null },
+    { "name": "wide item rotated vertically", "grid": { "columns": 5, "cells": 30 }, "slot": 5, "size": { "width": 6, "height": 1 }, "rotated": true, "cells": [5, 10, 15, 20, 25, 30] },
+    { "name": "three column descriptor", "grid": { "columns": 3, "cells": 8 }, "slot": 2, "size": { "width": 2, "height": 2 }, "cells": [2, 3, 5, 6] },
+    { "name": "zero anchor", "grid": { "columns": 5, "cells": 30 }, "slot": 0, "cells": null },
+    { "name": "fractional anchor", "grid": { "columns": 5, "cells": 30 }, "slot": 1.5, "cells": null },
+    { "name": "anchor beyond capacity", "grid": { "columns": 5, "cells": 13 }, "slot": 14, "cells": null }
+  ],
+  "placement": [
+    { "name": "covered cell rejects phone", "grid": { "columns": 5, "cells": 30 }, "items": [{ "slot": 1, "name": "rifle" }], "item": "phone", "toSlot": 2, "ignoreAnchors": [], "fits": false },
+    { "name": "uncovered cell accepts phone", "grid": { "columns": 5, "cells": 30 }, "items": [{ "slot": 1, "name": "rifle" }], "item": "phone", "toSlot": 5, "ignoreAnchors": [], "fits": true },
+    { "name": "move can use released footprint", "grid": { "columns": 5, "cells": 30 }, "items": [{ "slot": 1, "name": "rifle" }], "item": "rifle", "toSlot": 2, "ignoreAnchors": [1], "fits": true },
+    { "name": "split retains source footprint", "grid": { "columns": 5, "cells": 30 }, "items": [{ "slot": 1, "name": "rifle" }], "item": "rifle", "toSlot": 2, "ignoreAnchors": [], "fits": false },
+    { "name": "rotation at same anchor releases source", "grid": { "columns": 5, "cells": 30 }, "items": [{ "slot": 1, "name": "rifle" }], "item": "rifle", "toSlot": 1, "rotated": true, "ignoreAnchors": [1], "fits": true },
+    { "name": "rotation collides with another anchor", "grid": { "columns": 5, "cells": 30 }, "items": [{ "slot": 1, "name": "rifle" }, { "slot": 11, "name": "phone" }], "item": "rifle", "toSlot": 1, "rotated": true, "ignoreAnchors": [1], "fits": false }
+  ],
+  "definitions": {
+    "phone": {},
+    "rifle": { "size": { "width": 4, "height": 2 } }
+  }
+}

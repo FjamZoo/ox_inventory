@@ -55,7 +55,7 @@ local Inventory = require 'modules.inventory.server'
 function server.playerDropped(source)
 	local inv = Inventory(source) --[[@as OxInventory]]
 
-	if inv?.player then
+	if inv?.type == 'player' then
 		inv:closeInventory()
 		Inventory.Remove(inv)
 	end
