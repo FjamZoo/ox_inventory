@@ -33,6 +33,7 @@ client_script 'init.lua'
 ui_page 'web/build/index.html'
 
 files {
+    'modules/inventory/grid.lua',
     'client.lua',
     'server.lua',
     'locales/*.json',

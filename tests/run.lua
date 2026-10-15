@@ -52,8 +52,9 @@ local suites = {
     ['--compatibility'] = 'compatibility',
     ['--baseline'] = 'baseline',
     ['--grid'] = 'grid',
+    ['--geometry'] = 'geometry',
 }
-assert(suites[selected], 'expected --compatibility, --baseline, or --grid')
+assert(suites[selected], 'expected --compatibility, --baseline, --geometry, or --grid')
 assert(loadfile(root .. '/tests/server/' .. suites[selected] .. '.lua'))()(context)
 
 print(('%d passed, %d failed'):format(passed, failures))

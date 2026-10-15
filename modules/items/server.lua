@@ -98,7 +98,8 @@ CreateThread(function()
 						-- temporary solution for nil values
 						itemStr = itemStr:gsub('[%s]-[%w]+ = "?nil"?,?', '')
 						file[fileSize] = itemStr
-						ItemList[item.name] = item
+						item.size = { width = 1, height = 1 }
+                        ItemList[item.name] = item
 					end
 				end
 
